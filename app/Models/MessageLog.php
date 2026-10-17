@@ -6,7 +6,9 @@ use Illuminate\Database\Eloquent\Model;
 
 class MessageLog extends Model
 {
-    protected $fillable = ['campaign_id', 'contact_id', 'channel', 'status', 'error'];
+    protected $fillable = ['campaign_id', 'contact_id', 'channel', 'status', 'error', 'sent_at'];
+
+    protected $casts = ['sent_at' => 'datetime'];
 
     public function contact()
     {

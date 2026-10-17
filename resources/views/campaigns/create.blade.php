@@ -17,8 +17,8 @@
         <div>
             <label class="label">Canal *</label>
             <select name="channel" id="channel" class="input">
+                <option value="email" @selected(old('channel', 'email') === 'email')>Email</option>
                 <option value="sms" @selected(old('channel') === 'sms')>SMS</option>
-                <option value="email" @selected(old('channel') === 'email')>Email</option>
             </select>
         </div>
 
@@ -29,9 +29,9 @@
 
         <div class="md:col-span-2">
             <label class="label">Message *</label>
-            <textarea name="message" id="message" rows="5" class="input" required>{{ old('message') }}</textarea>
+            <textarea name="message" id="message" rows="7" class="input" required>{{ old('message') }}</textarea>
             <div class="mt-1.5 flex flex-wrap justify-between gap-2 text-xs text-slate-500">
-                <span>Astuce : écrivez <code class="rounded bg-slate-100 px-1 py-0.5 text-slate-800">{nom}</code> pour insérer le nom du contact.</span>
+                <span>Astuce : écrivez <code class="rounded bg-slate-100 px-1 py-0.5 text-slate-800">{nom}</code> pour insérer le nom du contact. Les liens (https://…) deviennent cliquables.</span>
                 <span id="counter" class="font-medium text-slate-700"></span>
             </div>
         </div>
@@ -53,6 +53,17 @@
                     <option value="{{ $key }}" @selected(old('segment_source') === $key)>{{ $label }}</option>
                 @endforeach
             </select>
+        </div>
+
+        <div>
+            <label class="label">Cadence d'envoi (messages par minute) *</label>
+            <input type="number" name="per_minute" value="{{ old('per_minute', 30) }}" min="1" max="600" class="input" required>
+            <p class="mt-1.5 text-xs text-slate-500">Respectez la limite de votre fournisseur SMTP (par minute et par jour).</p>
+        </div>
+        <div>
+            <label class="label">Date et heure d'envoi (facultatif)</label>
+            <input type="datetime-local" name="scheduled_at" value="{{ old('scheduled_at') }}" class="input">
+            <p class="mt-1.5 text-xs text-slate-500">Vous confirmerez la programmation sur la page suivante.</p>
         </div>
     </div>
 

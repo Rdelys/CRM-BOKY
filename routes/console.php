@@ -8,4 +8,8 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
-Schedule::command('crm:sync-buyers')->everyMinute()->withoutOverlapping();
+// Synchro des acheteurs du siteweb
+Schedule::command('crm:sync-buyers')->everyFifteenMinutes()->withoutOverlapping();
+
+// Lance les campagnes programmées dont l'heure est arrivée
+Schedule::command('campaigns:dispatch-due')->everyMinute()->withoutOverlapping();

@@ -1,12 +1,13 @@
 <?php
 
+use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\ContactController;
-use App\Http\Controllers\LeadController;
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\AccountController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\LeadController;
+use App\Http\Controllers\UnsubscribeController;
+use Illuminate\Support\Facades\Route;
 
 // Réception des prospects depuis le siteweb (protégé par jeton, sans CSRF)
 Route::post('/leads', [LeadController::class, 'store'])
@@ -15,6 +16,13 @@ Route::post('/leads', [LeadController::class, 'store'])
         \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class, // Laravel 11+
         \App\Http\Middleware\VerifyCsrfToken::class,                      // Laravel 10
     ]);
+
+// Désinscription : lien signé reçu par email (sans connexion ; sans CSRF car les clients mail font un POST "one-click")
+Route::match(['get', 'post'], '/unsubscribe/{id}', UnsubscribeController::class)
+    ->whereNumber('id')
+    ->middleware('signed')
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class])
+    ->name('unsubscribe');
 
 // Connexion (sans Breeze)
 Route::middleware('guest')->group(function () {
@@ -36,4 +44,9 @@ Route::middleware('auth')->group(function () {
 
     Route::resource('campaigns', CampaignController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
     Route::post('/campaigns/{campaign}/send', [CampaignController::class, 'send'])->name('campaigns.send');
+    Route::post('/campaigns/{campaign}/relaunch', [CampaignController::class, 'relaunch'])->name('campaigns.relaunch');
+    Route::post('/campaigns/{campaign}/schedule', [CampaignController::class, 'schedule'])->name('campaigns.schedule');
+    Route::post('/campaigns/{campaign}/unschedule', [CampaignController::class, 'unschedule'])->name('campaigns.unschedule');
+    Route::post('/campaigns/{campaign}/cancel', [CampaignController::class, 'cancel'])->name('campaigns.cancel');
+    Route::post('/campaigns/{campaign}/test', [CampaignController::class, 'test'])->name('campaigns.test');
 });
