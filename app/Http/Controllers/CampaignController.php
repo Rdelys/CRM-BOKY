@@ -37,6 +37,7 @@ class CampaignController extends Controller
             'segment_source' => ['nullable', Rule::in(array_keys(Contact::SOURCES))],
             'per_minute'     => 'required|integer|min:1|max:600',
             'scheduled_at'   => 'nullable|date|after:now',
+            'channel' => ['required', Rule::in(['sms', 'email', 'messenger'])],
         ]);
 
         $campaign = Campaign::create($data);

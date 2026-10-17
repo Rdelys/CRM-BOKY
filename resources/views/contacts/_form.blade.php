@@ -1,6 +1,9 @@
 @php($c = $contact ?? null)
 
 <div class="grid grid-cols-1 gap-5 md:grid-cols-2">
+    @if($c?->facebook_psid)
+        <input type="hidden" name="facebook_psid" value="{{ $c->facebook_psid }}">
+    @endif
     <div>
         <label class="label">Nom *</label>
         <input type="text" name="name" value="{{ old('name', $c?->name) }}" class="input" required>

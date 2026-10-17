@@ -8,12 +8,13 @@ class Contact extends Model
 {
     protected $fillable = [
         'name', 'phone', 'email', 'source', 'status', 'city', 'notes', 'unsubscribed',
-        'website_user_id', 'interests', 'registered_at',
+        'website_user_id', 'interests', 'registered_at','facebook_psid', 'last_fb_interaction_at',
     ];
 
     protected $casts = [
         'unsubscribed' => 'boolean',
         'registered_at' => 'datetime',
+        'last_fb_interaction_at' => 'datetime',
     ];
 
     const STATUSES = [

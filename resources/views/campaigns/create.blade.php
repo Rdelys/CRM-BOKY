@@ -19,12 +19,19 @@
             <select name="channel" id="channel" class="input">
                 <option value="email" @selected(old('channel', 'email') === 'email')>Email</option>
                 <option value="sms" @selected(old('channel') === 'sms')>SMS</option>
+                <option value="messenger" @selected(old('channel') === 'messenger')>Messenger (Facebook)</option>
             </select>
         </div>
 
         <div class="md:col-span-2" id="subject-box">
             <label class="label">Objet de l'email</label>
             <input type="text" name="subject" value="{{ old('subject') }}" class="input">
+        </div>
+        <div class="md:col-span-2 hidden" id="messenger-note">
+            <div class="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                Le message part uniquement aux contacts Facebook qui ont écrit à la Page dans les <strong>dernières 24 h</strong>.
+                Les autres sont ignorés (règle de Meta).
+            </div>
         </div>
 
         <div class="md:col-span-2">
@@ -79,14 +86,18 @@
     const message = document.getElementById('message');
     const counter = document.getElementById('counter');
 
+    const messengerNote = document.getElementById('messenger-note');
+
     function refresh() {
-        const isEmail = channel.value === 'email';
-        subjectBox.style.display = isEmail ? 'block' : 'none';
-        if (isEmail) {
-            counter.textContent = '';
-        } else {
+        const ch = channel.value;
+        subjectBox.style.display = ch === 'email' ? 'block' : 'none';
+        messengerNote.classList.toggle('hidden', ch !== 'messenger');
+
+        if (ch === 'sms') {
             const n = message.value.length;
             counter.textContent = n + ' caractères · ' + Math.max(1, Math.ceil(n / 160)) + ' SMS';
+        } else {
+            counter.textContent = '';
         }
     }
     channel.addEventListener('change', refresh);

@@ -12,6 +12,7 @@ use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
 use Illuminate\Support\Facades\Mail;
+use App\Services\FacebookService;
 
 /** Envoie UN message (email ou SMS) d'une campagne. */
 class SendCampaignMessageJob implements ShouldQueue
@@ -60,8 +61,23 @@ class SendCampaignMessageJob implements ShouldQueue
         }
 
         if ($campaign->channel === 'sms') {
-            app(SmsService::class)->send(
-                $contact->phone,
+        app(SmsService::class)->send(
+            $contact->phone,
+            str_replace('{nom}', (string) $contact->name, $campaign->message)
+        );
+        } elseif ($campaign->channel === 'messenger') {
+            // La fenêtre peut expirer entre le lancement et l'envoi (cadence lente)
+            if (!$contact->facebook_psid
+                || !$contact->last_fb_interaction_at
+                || $contact->last_fb_interaction_at->lt(now()->subHours(24))) {
+                $log->update(['status' => 'skipped', 'error' => 'Fenêtre de 24 h expirée']);
+                $this->finishIfDone($campaign);
+
+                return;
+            }
+
+            app(FacebookService::class)->send(
+                $contact->facebook_psid,
                 str_replace('{nom}', (string) $contact->name, $campaign->message)
             );
         } else {

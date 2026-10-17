@@ -64,6 +64,17 @@
                                 @if($contact->city)
                                     <div class="text-xs text-slate-500">{{ $contact->city }}</div>
                                 @endif
+                                @if($contact->facebook_psid)
+                                    @php($fbActive = $contact->last_fb_interaction_at && $contact->last_fb_interaction_at->gt(now()->subHours(24)))
+                                    <div class="mt-1 flex items-center gap-1.5 text-xs">
+                                        <span class="rounded bg-blue-100 px-1.5 py-0.5 font-semibold text-blue-700">Messenger</span>
+                                        @if($fbActive)
+                                            <span class="font-medium text-emerald-600">● joignable</span>
+                                        @elseif($contact->last_fb_interaction_at)
+                                            <span class="text-slate-400">vu le {{ $contact->last_fb_interaction_at->format('d/m H:i') }}</span>
+                                        @endif
+                                    </div>
+                                @endif
                             </div>
                         </div>
                     </td>

@@ -17,4 +17,12 @@ return [
         'key'    => env('SMS_API_KEY'),
         'sender' => env('SMS_SENDER', 'CRM'),
     ],
+
+    'facebook' => [
+    'verify_token' => env('FB_VERIFY_TOKEN'),
+    'app_secret'   => env('FB_APP_SECRET'),
+    'page_token'   => env('FB_PAGE_TOKEN'),
+    'page_id'      => env('FB_PAGE_ID'),
+    'graph'        => 'https://graph.facebook.com/v21.0',
+],
 ];

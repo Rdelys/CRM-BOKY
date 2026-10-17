@@ -238,13 +238,14 @@ class ContactController extends Controller
     private function validated(Request $request): array
     {
         $data = $request->validate([
-            'name'   => 'required|string|max:120',
-            'phone'  => 'nullable|string|max:30|required_without:email',
-            'email'  => 'nullable|email|max:150|required_without:phone',
-            'source' => ['required', Rule::in(array_keys(Contact::SOURCES))],
-            'status' => ['required', Rule::in(array_keys(Contact::STATUSES))],
-            'city'   => 'nullable|string|max:100',
-            'notes'  => 'nullable|string|max:2000',
+            'name'          => 'required|string|max:120',
+            'phone'         => 'nullable|string|max:30|required_without_all:email,facebook_psid',
+            'email'         => 'nullable|email|max:150|required_without_all:phone,facebook_psid',
+            'facebook_psid' => 'nullable|string|max:64',
+            'source'        => ['required', Rule::in(array_keys(Contact::SOURCES))],
+            'status'        => ['required', Rule::in(array_keys(Contact::STATUSES))],
+            'city'          => 'nullable|string|max:100',
+            'notes'         => 'nullable|string|max:2000',
         ]);
 
         $data['unsubscribed'] = $request->boolean('unsubscribed');

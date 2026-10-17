@@ -8,6 +8,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\UnsubscribeController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Controllers\FacebookWebhookController;
 
 // Réception des prospects depuis le siteweb (protégé par jeton, sans CSRF)
 Route::post('/leads', [LeadController::class, 'store'])
@@ -50,3 +51,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/campaigns/{campaign}/cancel', [CampaignController::class, 'cancel'])->name('campaigns.cancel');
     Route::post('/campaigns/{campaign}/test', [CampaignController::class, 'test'])->name('campaigns.test');
 });
+
+Route::get('/webhooks/facebook', [FacebookWebhookController::class, 'verify']);
+Route::post('/webhooks/facebook', [FacebookWebhookController::class, 'receive'])
+    ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class]);

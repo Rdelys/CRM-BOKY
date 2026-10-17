@@ -26,6 +26,9 @@ class Campaign extends Model
 
         if ($this->channel === 'sms') {
             $q->whereNotNull('phone');
+        } elseif ($this->channel === 'messenger') {
+            $q->whereNotNull('facebook_psid')
+            ->where('last_fb_interaction_at', '>=', now()->subHours(24));
         } else {
             $q->whereNotNull('email');
         }
