@@ -7,7 +7,7 @@
     <title>@yield('title', 'CRM')</title>
     @include('layouts._styles')
 </head>
-<body class="bg-slate-100 text-slate-800 antialiased">
+<body class="bg-gradient-to-br from-slate-100 via-slate-100 to-blue-50/60 text-slate-800 antialiased">
 
 @php
     $nav = [
@@ -99,7 +99,7 @@
         </div>
     </main>
 </div>
-
+@stack('scripts')
 <script>
     document.getElementById('menu-btn').addEventListener('click', function () {
         document.getElementById('sidebar').classList.toggle('hidden');

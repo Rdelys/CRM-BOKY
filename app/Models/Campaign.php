@@ -10,10 +10,14 @@ class Campaign extends Model
     protected $fillable = [
         'name', 'channel', 'subject', 'message',
         'segment_status', 'segment_source',
+        'scheduled_at', 'per_minute',
         'status', 'sent_count', 'failed_count', 'sent_at',
     ];
 
-    protected $casts = ['sent_at' => 'datetime'];
+    protected $casts = [
+        'sent_at'      => 'datetime',
+        'scheduled_at' => 'datetime',
+    ];
 
     /** Contacts ciblés par cette campagne (hors désinscrits). */
     public function recipients(): Builder
@@ -22,6 +26,9 @@ class Campaign extends Model
 
         if ($this->channel === 'sms') {
             $q->whereNotNull('phone');
+        } elseif ($this->channel === 'messenger') {
+            $q->whereNotNull('facebook_psid')
+            ->where('last_fb_interaction_at', '>=', now()->subHours(24));
         } else {
             $q->whereNotNull('email');
         }
@@ -39,5 +46,21 @@ class Campaign extends Model
     public function logs()
     {
         return $this->hasMany(MessageLog::class);
+    }
+
+    /** Nombre de messages par statut : pending, sent, failed, skipped, cancelled. */
+    public function stats(): array
+    {
+        $counts = $this->logs()
+            ->selectRaw('status, count(*) as total')
+            ->groupBy('status')
+            ->pluck('total', 'status');
+
+        $stats = [];
+        foreach (['pending', 'sent', 'failed', 'skipped', 'cancelled'] as $status) {
+            $stats[$status] = (int) ($counts[$status] ?? 0);
+        }
+
+        return $stats;
     }
 }
