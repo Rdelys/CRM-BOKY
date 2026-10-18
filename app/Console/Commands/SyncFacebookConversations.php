@@ -38,15 +38,24 @@ class SyncFacebookConversations extends Command
         $url = "{$cfg['graph']}/me/conversations";
         $params = [
             'fields' => 'participants,updated_time,messages.limit(10){from,created_time}',
-            'limit'  => 50,
+            'limit'  => 25,
         ];
 
+        $deadline = now()->addMinutes(5);
+        $pages = 0;
         $seen = 0;
         $created = 0;
         $updated = 0;
         $complete = true;
 
         do {
+            // Garde-fous : jamais plus de 5 minutes ni 100 pages
+            if (now()->gt($deadline) || ++$pages > 100) {
+                $this->warn('Arrêt de sécurité (durée ou nombre de pages dépassé).');
+                $complete = false;
+                break;
+            }
+
             $response = Http::timeout(30)->withToken($cfg['page_token'])->get($url, $params);
 
             if ($response->failed()) {
@@ -55,7 +64,15 @@ class SyncFacebookConversations extends Command
                 return self::FAILURE; // le point de synchro n'avance pas
             }
 
-            foreach ($response->json('data', []) as $conversation) {
+            $data = $response->json('data', []);
+            $this->line("Page {$pages} : " . count($data) . ' conversation(s)');
+
+            // Plus rien à lire : on s'arrête, même si Meta renvoie encore un lien « suivant »
+            if (empty($data)) {
+                break;
+            }
+
+            foreach ($data as $conversation) {
                 // Les conversations arrivent de la plus récente à la plus ancienne
                 if ($since && Carbon::parse($conversation['updated_time'])->lt($since)) {
                     break 2;
@@ -104,7 +121,9 @@ class SyncFacebookConversations extends Command
                 }
             }
 
-            $url = $response->json('paging.next');
+            // Évite de relire la même page si Meta renvoie le même lien
+            $next = $response->json('paging.next');
+            $url = ($next && $next !== $url) ? $next : null;
             $params = [];
         } while ($url);
 
