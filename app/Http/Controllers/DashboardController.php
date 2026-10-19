@@ -6,12 +6,13 @@ use App\Models\Campaign;
 use App\Models\Commande;
 use App\Models\Contact;
 use App\Models\MessageLog;
+use Carbon\Carbon;
 use Carbon\CarbonInterface;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
-use Carbon\Carbon;
 
 class DashboardController extends Controller
 {
@@ -26,9 +27,6 @@ class DashboardController extends Controller
 
     /** Nombre de fenêtres affichées selon la durée (en mois) d'une fenêtre de fidélité. */
     private const LOYALTY_UNITS = [1 => 6, 2 => 6, 3 => 6, 12 => 4];
-
-    /** Contact ayant au moins une commande non annulée (SUM pour agréger). */
-    private const CONVERTED_SQL = "SUM(CASE WHEN EXISTS (SELECT 1 FROM commandes WHERE commandes.contact_id = contacts.id AND commandes.statut <> 'annulee') THEN 1 ELSE 0 END)";
 
     public function __invoke()
     {
@@ -54,13 +52,14 @@ class DashboardController extends Controller
         $livMonth = $this->commandes($monthStart, $monthEnd, 'livree');
         $livPrev  = $this->commandes($prevMonthStart, $monthStart, 'livree');
 
+        // Conversion globale et fidélité (3 mois)
         $contactsTotal = Contact::count();
-        $converted = Contact::whereHas('commandes', fn ($q) => $q->where('statut', '!=', 'annulee'))->count();
+        $converted     = Contact::whereIn('contacts.id', $this->convertedIds())->count();
         [$cohortTotal, $cohortConv] = $this->cohortConversion($monthStart, $monthEnd);
         $loyalty = $this->loyaltyData(3, 2);
 
         $stats = [
-            'contacts'   => Contact::count(),
+            'contacts'   => $contactsTotal,
             'prospects'  => Contact::where('status', 'prospect')->count(),
             'clients'    => Contact::where('status', 'client')->count(),
             'campaigns'  => Campaign::where('status', 'sent')->count(),
@@ -68,30 +67,30 @@ class DashboardController extends Controller
                 ->where('unsubscribed', false)
                 ->where('last_fb_interaction_at', '>=', now()->subHours(24))
                 ->count(),
-            'new_today'        => $newToday,
-            'new_today_trend'  => $this->trend($newToday, $newYesterday),
-            'new_month'        => $newMonth,
-            'new_month_trend'  => $this->trend($newMonth, $newPrevMonth),
-            'mails_month'      => $mailsMonth,
+            'new_today'         => $newToday,
+            'new_today_trend'   => $this->trend($newToday, $newYesterday),
+            'new_month'         => $newMonth,
+            'new_month_trend'   => $this->trend($newMonth, $newPrevMonth),
+            'mails_month'       => $mailsMonth,
             'mails_month_trend' => $this->trend($mailsMonth, $mailsPrev),
 
             'conversion_rate'       => $contactsTotal > 0 ? round($converted / $contactsTotal * 100, 1) : null,
             'converted'             => $converted,
             'conversion_month_rate' => $cohortTotal > 0 ? round($cohortConv / $cohortTotal * 100, 1) : null,
-            'fidelite_rate'         => end($loyalty['rate']) ?: null,
+            'fidelite_rate'         => $loyalty['rate'][array_key_last($loyalty['rate'])] ?? null,
             'fidelite_prev'         => $loyalty['rate'][0] ?? null,
             'repeat_rate'           => $loyalty['repeat_rate'],
             'repeat_clients'        => $loyalty['repeaters'],
             'clients_total'         => $loyalty['clients'],
 
-            'cmd_month'         => $cmdMonth,
-            'cmd_month_trend'   => $this->trend($cmdMonth, $cmdPrev),
-            'ca_month'          => $caMonth,
-            'ca_month_trend'    => $this->trend($caMonth, $caPrev),
-            'livrees_month'     => $livMonth,
+            'cmd_month'           => $cmdMonth,
+            'cmd_month_trend'     => $this->trend($cmdMonth, $cmdPrev),
+            'ca_month'            => $caMonth,
+            'ca_month_trend'      => $this->trend($caMonth, $caPrev),
+            'livrees_month'       => $livMonth,
             'livrees_month_trend' => $this->trend($livMonth, $livPrev),
-            'a_livrer'          => Commande::whereIn('statut', Commande::STATUTS_A_LIVRER)->count(),
-            'a_livrer_today'    => Commande::whereIn('statut', Commande::STATUTS_A_LIVRER)
+            'a_livrer'            => Commande::whereIn('statut', Commande::STATUTS_A_LIVRER)->count(),
+            'a_livrer_today'      => Commande::whereIn('statut', Commande::STATUTS_A_LIVRER)
                 ->whereDate('date_livraison', today())
                 ->count(),
         ];
@@ -176,35 +175,49 @@ class DashboardController extends Controller
         }
 
         // Conversion : contacts arrivés dans la période et ceux qui ont commandé depuis
-$conv = ['contacts' => $zeros, 'converted' => $zeros, 'rate' => array_fill(0, count($keys), null)];
+        $conv   = ['contacts' => $zeros, 'converted' => $zeros, 'rate' => array_fill(0, count($keys), null)];
+        $bucket = $this->bucketExpr(self::CONTACT_DATE, $period);
 
-$rows = Contact::query()
-    ->selectRaw($this->bucketExpr(self::CONTACT_DATE, $period) . ' as bucket_key, COUNT(*) as total, COALESCE(' . self::CONVERTED_SQL . ', 0) as converted')
-    ->whereRaw(self::CONTACT_DATE . ' >= ?', [$start])
-    ->groupBy('bucket_key')
-    ->get();
+        $totaux = Contact::query()
+            ->selectRaw("{$bucket} as bucket_key, COUNT(*) as total")
+            ->whereRaw(self::CONTACT_DATE . ' >= ?', [$start])
+            ->groupBy('bucket_key')
+            ->pluck('total', 'bucket_key');
 
-foreach ($rows as $row) {
-    if (!isset($index[$row->bucket_key])) {
-        continue;
-    }
-    $i = $index[$row->bucket_key];
-    $conv['contacts'][$i]  = (int) $row->total;
-    $conv['converted'][$i] = (int) $row->converted;
-    $conv['rate'][$i]      = $row->total > 0 ? round($row->converted / $row->total * 100, 1) : null;
-}
+        $convertis = Contact::query()
+            ->whereIn('contacts.id', $this->convertedIds())
+            ->selectRaw("{$bucket} as bucket_key, COUNT(*) as total")
+            ->whereRaw(self::CONTACT_DATE . ' >= ?', [$start])
+            ->groupBy('bucket_key')
+            ->pluck('total', 'bucket_key');
 
-$conv['sources'] = Contact::query()
-    ->selectRaw('source, COUNT(*) as total, COALESCE(' . self::CONVERTED_SQL . ', 0) as converted')
-    ->whereRaw(self::CONTACT_DATE . ' >= ?', [$start])
-    ->groupBy('source')
-    ->get()
-    ->map(fn ($r) => [
-        'key'       => $r->source,
-        'total'     => (int) $r->total,
-        'converted' => (int) $r->converted,
-        'rate'      => $r->total > 0 ? round($r->converted / $r->total * 100, 1) : 0,
-    ])->values()->all();
+        foreach ($keys as $i => $key) {
+            $t = (int) ($totaux[$key] ?? 0);
+            $c = (int) ($convertis[$key] ?? 0);
+            $conv['contacts'][$i]  = $t;
+            $conv['converted'][$i] = $c;
+            $conv['rate'][$i]      = $t > 0 ? round($c / $t * 100, 1) : null;
+        }
+
+        $srcTotaux = Contact::query()
+            ->selectRaw('source, COUNT(*) as total')
+            ->whereRaw(self::CONTACT_DATE . ' >= ?', [$start])
+            ->groupBy('source')
+            ->pluck('total', 'source');
+
+        $srcConvertis = Contact::query()
+            ->whereIn('contacts.id', $this->convertedIds())
+            ->selectRaw('source, COUNT(*) as total')
+            ->whereRaw(self::CONTACT_DATE . ' >= ?', [$start])
+            ->groupBy('source')
+            ->pluck('total', 'source');
+
+        $conv['sources'] = $srcTotaux->map(fn ($t, $source) => [
+            'key'       => $source,
+            'total'     => (int) $t,
+            'converted' => (int) ($srcConvertis[$source] ?? 0),
+            'rate'      => $t > 0 ? round(($srcConvertis[$source] ?? 0) / $t * 100, 1) : 0,
+        ])->values()->all();
 
         return response()->json([
             'period'      => $period,
@@ -215,13 +228,24 @@ $conv['sources'] = Contact::query()
             'messages'    => $messages,
             'commandes'   => $commandes,
             'chiffre'     => $chiffre,
-            'conversion' => $conv,
+            'conversion'  => $conv,
             'top_clients' => $this->topClients($start),
             'top_livres'  => Commande::topLivres($start, 5),
         ]);
     }
 
-    /** Meilleurs clients de la période (par montant, puis par nombre de commandes). */
+    /** Données de fidélité (JSON) pour des fenêtres de 1, 2, 3 mois ou 1 an. */
+    public function loyalty(Request $request): JsonResponse
+    {
+        $months = (int) $request->query('months', 3);
+        if (!isset(self::LOYALTY_UNITS[$months])) {
+            $months = 3;
+        }
+
+        return response()->json($this->loyaltyData($months, self::LOYALTY_UNITS[$months]));
+    }
+
+    /** Meilleurs clients de la période : classés par nombre de commandes (le montant ne départage que les égalités). */
     private function topClients(CarbonInterface $start): array
     {
         $lignes = Commande::query()
@@ -242,6 +266,129 @@ $conv['sources'] = Contact::query()
             'commandes' => (int) $l->nb,
             'total'     => (int) $l->total,
         ])->values()->all();
+    }
+
+    /** Contacts ayant au moins une commande non annulée (sous-requête non corrélée, compatible ONLY_FULL_GROUP_BY). */
+    private function convertedIds(): Builder
+    {
+        return Commande::query()
+            ->select('contact_id')
+            ->where('statut', '!=', 'annulee');
+    }
+
+    /** Contacts arrivés dans [from, to[ : total et nombre ayant commandé. */
+    private function cohortConversion(CarbonInterface $from, CarbonInterface $to): array
+    {
+        $base = fn () => Contact::query()
+            ->whereRaw(self::CONTACT_DATE . ' >= ? and ' . self::CONTACT_DATE . ' < ?', [$from, $to]);
+
+        $total     = $base()->count();
+        $converted = $base()->whereIn('contacts.id', $this->convertedIds())->count();
+
+        return [$total, $converted];
+    }
+
+    /**
+     * Fidélité par fenêtres de $months mois (la plus récente se termine à la fin du mois en cours).
+     * Taux de fidélité d'une fenêtre = clients actifs dans la fenêtre précédente qui recommandent dans celle-ci.
+     */
+    private function loyaltyData(int $months, int $count): array
+    {
+        $end    = now()->startOfMonth()->addMonth();
+        $oldest = $end->copy()->subMonthsNoOverflow($months * ($count + 1));
+
+        $windows = [];
+        for ($k = 0; $k <= $count; $k++) {
+            $windows[] = [
+                's'   => $oldest->copy()->addMonthsNoOverflow($k * $months),
+                'e'   => $oldest->copy()->addMonthsNoOverflow(($k + 1) * $months),
+                'ids' => [],
+            ];
+        }
+
+        $orders = Commande::query()
+            ->where('statut', '!=', 'annulee')
+            ->where('date_commande', '>=', $oldest)
+            ->where('date_commande', '<', $end)
+            ->get(['contact_id', 'date_commande']);
+
+        foreach ($orders as $o) {
+            foreach ($windows as $k => $w) {
+                if ($o->date_commande >= $w['s'] && $o->date_commande < $w['e']) {
+                    $windows[$k]['ids'][$o->contact_id] = ($windows[$k]['ids'][$o->contact_id] ?? 0) + 1;
+                    break;
+                }
+            }
+        }
+
+        // Date de la toute première commande de chaque client
+        $first = Commande::query()
+            ->where('statut', '!=', 'annulee')
+            ->selectRaw('contact_id, MIN(date_commande) as first_at')
+            ->groupBy('contact_id')
+            ->pluck('first_at', 'contact_id');
+
+        $out = [
+            'months' => $months, 'labels' => [], 'titles' => [], 'active' => [], 'retained' => [],
+            'back' => [], 'new' => [], 'lost' => [], 'rate' => [], 'commandes' => [],
+        ];
+
+        for ($k = 1; $k <= $count; $k++) {
+            $prev = $windows[$k - 1]['ids'];
+            $cur  = $windows[$k]['ids'];
+            $s    = $windows[$k]['s'];
+
+            $retained = count(array_intersect_key($cur, $prev));
+            $new = 0;
+            foreach (array_keys($cur) as $cid) {
+                if (isset($first[$cid]) && Carbon::parse($first[$cid]) >= $s) {
+                    $new++;
+                }
+            }
+
+            $out['labels'][]    = $this->loyaltyLabel($windows[$k]['s'], $windows[$k]['e'], $months, false);
+            $out['titles'][]    = $this->loyaltyLabel($windows[$k]['s'], $windows[$k]['e'], $months, true);
+            $out['active'][]    = count($cur);
+            $out['retained'][]  = $retained;
+            $out['new'][]       = $new;
+            $out['back'][]      = max(0, count($cur) - $retained - $new);
+            $out['lost'][]      = count($prev) - $retained;
+            $out['rate'][]      = count($prev) > 0 ? round($retained / count($prev) * 100, 1) : null;
+            $out['commandes'][] = array_sum($cur);
+        }
+
+        // Vue globale : récurrence et niveaux (mêmes seuils que la page « Meilleurs clients »)
+        $nbs = Commande::query()
+            ->where('statut', '!=', 'annulee')
+            ->selectRaw('contact_id, COUNT(*) as nb')
+            ->groupBy('contact_id')
+            ->pluck('nb');
+
+        $clients   = $nbs->count();
+        $repeaters = $nbs->filter(fn ($n) => $n >= 2)->count();
+
+        $out['clients']     = $clients;
+        $out['repeaters']   = $repeaters;
+        $out['repeat_rate'] = $clients > 0 ? round($repeaters / $clients * 100, 1) : null;
+        $out['tiers']       = [
+            'vip'     => $nbs->filter(fn ($n) => $n >= 5)->count(),
+            'fidele'  => $nbs->filter(fn ($n) => $n >= 2 && $n < 5)->count(),
+            'nouveau' => $nbs->filter(fn ($n) => $n < 2)->count(),
+        ];
+
+        return $out;
+    }
+
+    private function loyaltyLabel(CarbonInterface $s, CarbonInterface $e, int $months, bool $long): string
+    {
+        $s    = $s->copy()->locale('fr');
+        $last = $e->copy()->subMonthNoOverflow()->locale('fr');
+
+        if ($months === 1) {
+            return $s->translatedFormat($long ? 'F Y' : 'M Y');
+        }
+
+        return $s->translatedFormat($long ? 'F Y' : 'M y') . ' → ' . $last->translatedFormat($long ? 'F Y' : 'M y');
     }
 
     /** @return array{0: CarbonInterface, 1: string[], 2: string[], 3: string[]} */
@@ -344,127 +491,4 @@ $conv['sources'] = Contact::query()
     {
         return $previous === 0 ? null : round(($current - $previous) / $previous * 100, 1);
     }
-
-    /** Données de fidélité (JSON) pour des fenêtres de 1, 2, 3 mois ou 1 an. */
-public function loyalty(Request $request): JsonResponse
-{
-    $months = (int) $request->query('months', 3);
-    if (!isset(self::LOYALTY_UNITS[$months])) {
-        $months = 3;
-    }
-
-    return response()->json($this->loyaltyData($months, self::LOYALTY_UNITS[$months]));
-}
-
-/** Contacts arrivés dans [from, to[ : total et nombre ayant commandé. */
-private function cohortConversion(CarbonInterface $from, CarbonInterface $to): array
-{
-    $row = Contact::query()
-        ->selectRaw('COUNT(*) as total, COALESCE(' . self::CONVERTED_SQL . ', 0) as converted')
-        ->whereRaw(self::CONTACT_DATE . ' >= ? and ' . self::CONTACT_DATE . ' < ?', [$from, $to])
-        ->first();
-
-    return [(int) $row->total, (int) $row->converted];
-}
-
-/**
- * Fidélité par fenêtres de $months mois (la plus récente se termine à la fin du mois en cours).
- * Taux de fidélité d'une fenêtre = clients actifs dans la fenêtre précédente qui recommandent dans celle-ci.
- */
-private function loyaltyData(int $months, int $count): array
-{
-    $end    = now()->startOfMonth()->addMonth();
-    $oldest = $end->copy()->subMonthsNoOverflow($months * ($count + 1));
-
-    $windows = [];
-    for ($k = 0; $k <= $count; $k++) {
-        $windows[] = [
-            's'   => $oldest->copy()->addMonthsNoOverflow($k * $months),
-            'e'   => $oldest->copy()->addMonthsNoOverflow(($k + 1) * $months),
-            'ids' => [],
-        ];
-    }
-
-    $orders = Commande::query()
-        ->where('statut', '!=', 'annulee')
-        ->where('date_commande', '>=', $oldest)
-        ->where('date_commande', '<', $end)
-        ->get(['contact_id', 'date_commande']);
-
-    foreach ($orders as $o) {
-        foreach ($windows as $k => $w) {
-            if ($o->date_commande >= $w['s'] && $o->date_commande < $w['e']) {
-                $windows[$k]['ids'][$o->contact_id] = ($windows[$k]['ids'][$o->contact_id] ?? 0) + 1;
-                break;
-            }
-        }
-    }
-
-    // Date de la toute première commande de chaque client
-    $first = Commande::query()
-        ->where('statut', '!=', 'annulee')
-        ->selectRaw('contact_id, MIN(date_commande) as first_at')
-        ->groupBy('contact_id')
-        ->pluck('first_at', 'contact_id');
-
-    $out = ['months' => $months, 'labels' => [], 'titles' => [], 'active' => [], 'retained' => [],
-            'back' => [], 'new' => [], 'lost' => [], 'rate' => [], 'commandes' => []];
-
-    for ($k = 1; $k <= $count; $k++) {
-        $prev = $windows[$k - 1]['ids'];
-        $cur  = $windows[$k]['ids'];
-        $s    = $windows[$k]['s'];
-
-        $retained = count(array_intersect_key($cur, $prev));
-        $new = 0;
-        foreach (array_keys($cur) as $cid) {
-            if (isset($first[$cid]) && Carbon::parse($first[$cid]) >= $s) {
-                $new++;
-            }
-        }
-
-        $out['labels'][]    = $this->loyaltyLabel($windows[$k]['s'], $windows[$k]['e'], $months, false);
-        $out['titles'][]    = $this->loyaltyLabel($windows[$k]['s'], $windows[$k]['e'], $months, true);
-        $out['active'][]    = count($cur);
-        $out['retained'][]  = $retained;
-        $out['new'][]       = $new;
-        $out['back'][]      = max(0, count($cur) - $retained - $new);
-        $out['lost'][]      = count($prev) - $retained;
-        $out['rate'][]      = count($prev) > 0 ? round($retained / count($prev) * 100, 1) : null;
-        $out['commandes'][] = array_sum($cur);
-    }
-
-    // Vue globale : récurrence et niveaux (mêmes seuils que la page « Meilleurs clients »)
-    $nbs = Commande::query()
-        ->where('statut', '!=', 'annulee')
-        ->selectRaw('contact_id, COUNT(*) as nb')
-        ->groupBy('contact_id')
-        ->pluck('nb');
-
-    $clients   = $nbs->count();
-    $repeaters = $nbs->filter(fn ($n) => $n >= 2)->count();
-
-    $out['clients']     = $clients;
-    $out['repeaters']   = $repeaters;
-    $out['repeat_rate'] = $clients > 0 ? round($repeaters / $clients * 100, 1) : null;
-    $out['tiers']       = [
-        'vip'     => $nbs->filter(fn ($n) => $n >= 5)->count(),
-        'fidele'  => $nbs->filter(fn ($n) => $n >= 2 && $n < 5)->count(),
-        'nouveau' => $nbs->filter(fn ($n) => $n < 2)->count(),
-    ];
-
-    return $out;
-}
-
-private function loyaltyLabel(CarbonInterface $s, CarbonInterface $e, int $months, bool $long): string
-{
-    $s = $s->copy()->locale('fr');
-    $last = $e->copy()->subMonthNoOverflow()->locale('fr');
-
-    if ($months === 1) {
-        return $s->translatedFormat($long ? 'F Y' : 'M Y');
-    }
-
-    return $s->translatedFormat($long ? 'F Y' : 'M y') . ' → ' . $last->translatedFormat($long ? 'F Y' : 'M y');
-}
 }
