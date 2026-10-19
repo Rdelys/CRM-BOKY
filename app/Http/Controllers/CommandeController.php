@@ -57,7 +57,7 @@ class CommandeController extends Controller
     ];
 
     /** Dates ambiguës du type 7/8/2025 : true = mois/jour (Google Forms, comme votre fichier), false = jour/mois. */
-    private const AMBIGU_MOIS_JOUR = true;
+    private const AMBIGU_MOIS_JOUR = false;
 
     /* ------------------------------------------------------------------ */
     /*  Liste, création, modification                                      */
@@ -162,7 +162,7 @@ class CommandeController extends Controller
 
         // L'ancien client peut ne plus avoir de commande active
         if ($ancienContactId !== (int) $commande->contact_id) {
-            Contact::find($ancienContactId)?->synchroniserStatutClient();
+            Contact::find($ancienContactId)?->where('statut', 'livree');
         }
 
         return redirect()->route('commandes.index')

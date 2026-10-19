@@ -9,7 +9,9 @@
     </div>
     <div class="flex flex-wrap gap-2">
         <a href="{{ route('contacts.import.form') }}" class="btn-outline">Importer CSV</a>
-        <a href="{{ route('commandes.create', ['contact_id' => $contact->id]) }}" class="text-sm font-medium text-emerald-600 hover:text-emerald-800">Commande</a>
+<a href="{{ route('commandes.create') }}" class="btn-outline">
+    Nouvelle commande
+</a>
         <a href="{{ route('contacts.create') }}" class="btn-primary">
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
             Nouveau contact
