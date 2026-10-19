@@ -72,4 +72,29 @@ class Contact extends Model
     {
         return $this->hasMany(MessageLog::class);
     }
+
+    public function commandes()
+    {
+        return $this->hasMany(Commande::class);
+    }
+
+    /**
+     * Met à jour le statut du contact selon ses commandes :
+     * - au moins une commande non annulée  => Client
+     * - uniquement des commandes annulées  => un client redevient « Contacté »
+     */
+    public function synchroniserStatutClient(): void
+    {
+        if ($this->commandes()->where('statut', '!=', 'annulee')->exists()) {
+            if ($this->status !== 'client') {
+                $this->update(['status' => 'client']);
+            }
+
+            return;
+        }
+
+        if ($this->status === 'client' && $this->commandes()->exists()) {
+            $this->update(['status' => 'contacted']);
+        }
+    }
 }

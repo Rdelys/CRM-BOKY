@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Campaign;
+use App\Models\Commande;
 use App\Models\Contact;
 use App\Models\MessageLog;
 use Carbon\CarbonInterface;
@@ -37,6 +38,15 @@ class DashboardController extends Controller
         $mailsMonth = $this->sent('email', $monthStart, $monthStart->copy()->addMonth());
         $mailsPrev  = $this->sent('email', $prevMonthStart, $monthStart);
 
+        $monthEnd = $monthStart->copy()->addMonth();
+
+        $cmdMonth = $this->commandes($monthStart, $monthEnd);
+        $cmdPrev  = $this->commandes($prevMonthStart, $monthStart);
+        $caMonth  = $this->chiffre($monthStart, $monthEnd);
+        $caPrev   = $this->chiffre($prevMonthStart, $monthStart);
+        $livMonth = $this->commandes($monthStart, $monthEnd, 'livree');
+        $livPrev  = $this->commandes($prevMonthStart, $monthStart, 'livree');
+
         $stats = [
             'contacts'   => Contact::count(),
             'prospects'  => Contact::where('status', 'prospect')->count(),
@@ -52,12 +62,24 @@ class DashboardController extends Controller
             'new_month_trend'  => $this->trend($newMonth, $newPrevMonth),
             'mails_month'      => $mailsMonth,
             'mails_month_trend' => $this->trend($mailsMonth, $mailsPrev),
+
+            'cmd_month'         => $cmdMonth,
+            'cmd_month_trend'   => $this->trend($cmdMonth, $cmdPrev),
+            'ca_month'          => $caMonth,
+            'ca_month_trend'    => $this->trend($caMonth, $caPrev),
+            'livrees_month'     => $livMonth,
+            'livrees_month_trend' => $this->trend($livMonth, $livPrev),
+            'a_livrer'          => Commande::whereIn('statut', Commande::STATUTS_A_LIVRER)->count(),
+            'a_livrer_today'    => Commande::whereIn('statut', Commande::STATUTS_A_LIVRER)
+                ->whereDate('date_livraison', today())
+                ->count(),
         ];
 
         $latestContacts  = Contact::latest()->limit(6)->get();
         $latestCampaigns = Campaign::latest()->limit(5)->get();
+        $latestCommandes = Commande::with('contact')->orderByDesc('date_commande')->orderByDesc('id')->limit(6)->get();
 
-        return view('dashboard', compact('stats', 'latestContacts', 'latestCampaigns'));
+        return view('dashboard', compact('stats', 'latestContacts', 'latestCampaigns', 'latestCommandes'));
     }
 
     /** Données des graphiques (JSON), filtrées par période. */
@@ -112,14 +134,61 @@ class DashboardController extends Controller
             }
         }
 
+        // Commandes par statut + chiffre d'affaires (hors annulées)
+        $commandes = array_fill_keys(array_keys(Commande::STATUTS), $zeros);
+        $chiffre = $zeros;
+
+        $rows = Commande::query()
+            ->selectRaw($this->bucketExpr('date_commande', $period) . ' as bucket_key, statut, COUNT(*) as total, COALESCE(SUM(montant_total), 0) as ca')
+            ->where('date_commande', '>=', $start)
+            ->groupBy('bucket_key', 'statut')
+            ->get();
+
+        foreach ($rows as $row) {
+            if (!isset($index[$row->bucket_key]) || !isset($commandes[$row->statut])) {
+                continue;
+            }
+            $commandes[$row->statut][$index[$row->bucket_key]] = (int) $row->total;
+            if ($row->statut !== 'annulee') {
+                $chiffre[$index[$row->bucket_key]] += (int) $row->ca;
+            }
+        }
+
         return response()->json([
-            'period'   => $period,
-            'range'    => $range,
-            'labels'   => $labels,
-            'titles'   => $titles,
-            'contacts' => $contacts,
-            'messages' => $messages,
+            'period'      => $period,
+            'range'       => $range,
+            'labels'      => $labels,
+            'titles'      => $titles,
+            'contacts'    => $contacts,
+            'messages'    => $messages,
+            'commandes'   => $commandes,
+            'chiffre'     => $chiffre,
+            'top_clients' => $this->topClients($start),
+            'top_livres'  => Commande::topLivres($start, 5),
         ]);
+    }
+
+    /** Meilleurs clients de la période (par montant, puis par nombre de commandes). */
+    private function topClients(CarbonInterface $start): array
+    {
+        $lignes = Commande::query()
+            ->selectRaw('contact_id, COUNT(*) as nb, COALESCE(SUM(montant_total), 0) as total')
+            ->where('statut', '!=', 'annulee')
+            ->where('date_commande', '>=', $start)
+            ->groupBy('contact_id')
+            ->orderByDesc('total')
+            ->orderByDesc('nb')
+            ->limit(5)
+            ->get();
+
+        $contacts = Contact::whereIn('id', $lignes->pluck('contact_id'))->get()->keyBy('id');
+
+        return $lignes->map(fn ($l) => [
+            'id'        => (int) $l->contact_id,
+            'name'      => $contacts->get($l->contact_id)?->name ?? '—',
+            'commandes' => (int) $l->nb,
+            'total'     => (int) $l->total,
+        ])->values()->all();
     }
 
     /** @return array{0: CarbonInterface, 1: string[], 2: string[], 3: string[]} */
@@ -198,6 +267,23 @@ class DashboardController extends Controller
             ->where('sent_at', '>=', $from)
             ->where('sent_at', '<', $to)
             ->count();
+    }
+
+    private function commandes(CarbonInterface $from, CarbonInterface $to, ?string $statut = null): int
+    {
+        return Commande::where('date_commande', '>=', $from)
+            ->where('date_commande', '<', $to)
+            ->when($statut, fn ($q, $s) => $q->where('statut', $s))
+            ->count();
+    }
+
+    /** Chiffre d'affaires (commandes non annulées). */
+    private function chiffre(CarbonInterface $from, CarbonInterface $to): int
+    {
+        return (int) Commande::where('date_commande', '>=', $from)
+            ->where('date_commande', '<', $to)
+            ->where('statut', '!=', 'annulee')
+            ->sum('montant_total');
     }
 
     /** Variation en % (null s'il n'y a rien à comparer). */

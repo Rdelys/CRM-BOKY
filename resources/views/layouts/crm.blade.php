@@ -11,10 +11,12 @@
 
 @php
     $nav = [
-        ['route' => 'dashboard',       'match' => 'dashboard',   'label' => 'Tableau de bord', 'icon' => '<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'],
-        ['route' => 'contacts.index',  'match' => 'contacts.*',  'label' => 'Contacts',        'icon' => '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>'],
-        ['route' => 'campaigns.index', 'match' => 'campaigns.*', 'label' => 'Campagnes',       'icon' => '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>'],
-        ['route' => 'password.edit',   'match' => 'password.*',  'label' => 'Mot de passe',    'icon' => '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>'],
+        ['route' => 'dashboard',          'match' => 'dashboard',   'label' => 'Tableau de bord', 'icon' => '<rect x="3" y="3" width="7" height="9"/><rect x="14" y="3" width="7" height="5"/><rect x="14" y="12" width="7" height="9"/><rect x="3" y="16" width="7" height="5"/>'],
+        ['route' => 'contacts.index',     'match' => 'contacts.*',  'label' => 'Contacts',        'icon' => '<circle cx="12" cy="8" r="4"/><path d="M4 21c0-4 4-6 8-6s8 2 8 6"/>'],
+        ['route' => 'commandes.index',    'match' => ['commandes.index', 'commandes.create', 'commandes.edit', 'commandes.import.form'], 'label' => 'Commandes', 'icon' => '<path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 01-8 0"/>'],
+        ['route' => 'commandes.classement', 'match' => 'commandes.classement', 'label' => 'Meilleurs clients', 'icon' => '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4z"/><path d="M17 5h3v2a3 3 0 01-3 3M7 5H4v2a3 3 0 003 3"/>'],
+        ['route' => 'campaigns.index',    'match' => 'campaigns.*', 'label' => 'Campagnes',       'icon' => '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>'],
+        ['route' => 'password.edit',      'match' => 'password.*',  'label' => 'Mot de passe',    'icon' => '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>'],
     ];
     $user = auth()->user();
 @endphp
@@ -42,10 +44,12 @@
             </div>
         </div>
 
-        <nav class="flex-1 space-y-1 px-3 py-5">
+        <nav class="flex-1 space-y-1 overflow-y-auto px-3 py-5">
             <p class="px-3 pb-2 text-xs font-semibold uppercase tracking-wider text-slate-500">Menu</p>
             @foreach($nav as $item)
-                @php($active = request()->routeIs($item['match']))
+                @php
+                    $active = request()->routeIs(...(array) $item['match']);
+                @endphp
                 <a href="{{ route($item['route']) }}"
                    class="flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition
                           {{ $active ? 'bg-blue-600 text-white shadow-md shadow-blue-600/20' : 'text-slate-300 hover:bg-white/10 hover:text-white' }}">

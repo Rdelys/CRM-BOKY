@@ -3,6 +3,7 @@
 use App\Http\Controllers\AccountController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CampaignController;
+use App\Http\Controllers\CommandeController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LeadController;
@@ -43,6 +44,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/contacts/import', [ContactController::class, 'importForm'])->name('contacts.import.form');
     Route::post('/contacts/import', [ContactController::class, 'import'])->name('contacts.import');
     Route::resource('contacts', ContactController::class)->except('show');
+
+    // Suivi des commandes (les routes fixes doivent rester avant la resource)
+    Route::get('/commandes/import', [CommandeController::class, 'importForm'])->name('commandes.import.form');
+    Route::post('/commandes/import', [CommandeController::class, 'import'])->name('commandes.import');
+    Route::get('/commandes/classement', [CommandeController::class, 'classement'])->name('commandes.classement');
+    Route::get('/commandes/recherche-contacts', [CommandeController::class, 'rechercheContacts'])->name('commandes.contacts.recherche');
+    Route::post('/commandes/{commande}/statut', [CommandeController::class, 'statut'])->name('commandes.statut');
+    Route::resource('commandes', CommandeController::class)->except('show');
 
     Route::resource('campaigns', CampaignController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
     Route::post('/campaigns/{campaign}/send', [CampaignController::class, 'send'])->name('campaigns.send');
