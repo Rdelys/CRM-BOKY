@@ -227,7 +227,7 @@ class CommandeController extends Controller
     public function classement(Request $request)
     {
         $periode = in_array($request->query('periode'), ['30', '90', '365'], true) ? $request->query('periode') : 'tout';
-        $tri = $request->query('tri') === 'commandes' ? 'commandes' : 'montant';
+        $tri = $request->query('tri') === 'montant' ? 'montant' : 'commandes';
         $depuis = $periode === 'tout' ? null : now()->subDays((int) $periode)->startOfDay();
 
         $base = fn () => Commande::query()

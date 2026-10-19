@@ -10,7 +10,7 @@
 <div class="mb-6 flex flex-wrap items-end justify-between gap-4">
     <div>
         <h1 class="text-2xl font-bold tracking-tight text-slate-900">Meilleurs clients</h1>
-        <p class="mt-1 text-sm text-slate-500">Classement des clients qui commandent le plus (commandes annulées exclues).</p>
+        <p class="mt-1 text-sm text-slate-500">Classement des clients selon leur nombre de commandes (commandes annulées exclues).</p>
     </div>
     <div class="flex flex-wrap gap-2">
         <a href="{{ route('commandes.index') }}" class="btn-outline">Toutes les commandes</a>

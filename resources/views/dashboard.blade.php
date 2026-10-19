@@ -147,6 +147,49 @@
     </div>
 </div>
 
+{{-- KPI conversion & fidélité --}}
+@php
+    $fid = $stats['fidelite_rate'];
+    $fidPrev = $stats['fidelite_prev'];
+    $fidDelta = ($fid !== null && $fidPrev !== null) ? round($fid - $fidPrev, 1) : null;
+@endphp
+<div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+    <div class="card p-5">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Taux de conversion</span>
+        <div class="mt-2 text-3xl font-bold text-slate-900">
+            {{ $stats['conversion_rate'] !== null ? number_format($stats['conversion_rate'], 1, ',', ' ') . ' %' : '—' }}
+        </div>
+        <div class="mt-3 text-xs text-slate-500">
+            <strong class="text-slate-900">{{ $stats['converted'] }}</strong> sur {{ $stats['contacts'] }} contacts ont commandé
+            @if($stats['conversion_month_rate'] !== null)
+                · ce mois : <strong class="text-slate-900">{{ number_format($stats['conversion_month_rate'], 1, ',', ' ') }} %</strong>
+            @endif
+        </div>
+    </div>
+
+    <div class="card p-5">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Fidélité (3 mois)</span>
+        <div class="mt-2 text-3xl font-bold text-slate-900">{{ $fid !== null ? number_format($fid, 1, ',', ' ') . ' %' : '—' }}</div>
+        <div class="mt-3 text-xs text-slate-500">
+            @if($fidDelta !== null)
+                <span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 font-semibold {{ $fidDelta >= 0 ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700' }}">
+                    {{ $fidDelta >= 0 ? '▲' : '▼' }} {{ number_format(abs($fidDelta), 1, ',', ' ') }} pt
+                </span> vs 3 mois précédents
+            @else
+                Clients du trimestre précédent qui ont recommandé
+            @endif
+        </div>
+    </div>
+
+    <div class="card p-5">
+        <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Clients récurrents</span>
+        <div class="mt-2 text-3xl font-bold text-slate-900">{{ $stats['repeat_rate'] !== null ? number_format($stats['repeat_rate'], 1, ',', ' ') . ' %' : '—' }}</div>
+        <div class="mt-3 text-xs text-slate-500">
+            <strong class="text-slate-900">{{ $stats['repeat_clients'] }}</strong> sur {{ $stats['clients_total'] }} clients ont commandé 2 fois ou plus
+        </div>
+    </div>
+</div>
+
 {{-- Filtre de période --}}
 <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
     <h2 class="text-lg font-bold text-slate-900">Statistiques</h2>
@@ -253,6 +296,59 @@
     </div>
 </div>
 
+{{-- Conversion --}}
+<div class="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
+    <div class="card p-6 lg:col-span-2">
+        <h2 class="text-base font-bold text-slate-900">Taux de conversion</h2>
+        <p class="text-sm text-slate-500">
+            <span id="conv-conv" class="font-semibold text-slate-900">0</span> sur
+            <span id="conv-total" class="font-semibold text-slate-900">0</span> nouveaux contacts ont commandé ·
+            <span id="conv-rate" class="font-semibold text-blue-600">—</span>
+        </p>
+        <div class="relative mt-4 h-64">
+            <canvas id="conv-chart"></canvas>
+            <p id="conv-empty" class="absolute inset-0 hidden items-center justify-center text-sm text-slate-400">Aucun contact sur cette période</p>
+        </div>
+    </div>
+    <div class="card p-6">
+        <h2 class="text-base font-bold text-slate-900">Conversion par source</h2>
+        <p class="text-sm text-slate-500">Quel canal amène des acheteurs</p>
+        <ul id="conv-sources" class="mt-4 space-y-3"></ul>
+    </div>
+</div>
+
+{{-- Fidélité --}}
+<div class="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
+    <div class="card p-6 lg:col-span-2">
+        <div class="flex flex-wrap items-start justify-between gap-3">
+            <div>
+                <h2 class="text-base font-bold text-slate-900">Taux de fidélité</h2>
+                <p class="text-sm text-slate-500">
+                    Dernière période : <span id="loy-rate" class="font-semibold text-blue-600">—</span> ·
+                    <span id="loy-retained" class="font-semibold text-slate-900">0</span> fidèles sur
+                    <span id="loy-prev" class="font-semibold text-slate-900">0</span> clients de la période précédente
+                </p>
+            </div>
+            <div class="seg" id="loy-seg">
+                <button type="button" class="seg-btn" data-months="1">1 mois</button>
+                <button type="button" class="seg-btn" data-months="2">2 mois</button>
+                <button type="button" class="seg-btn" data-months="3">3 mois</button>
+                <button type="button" class="seg-btn" data-months="12">1 an</button>
+            </div>
+        </div>
+        <div class="relative mt-4 h-72">
+            <canvas id="loy-chart"></canvas>
+            <p id="loy-empty" class="absolute inset-0 hidden items-center justify-center text-sm text-slate-400">Aucune commande sur ces périodes</p>
+        </div>
+        <p class="mt-3 text-xs text-slate-400">Fidèle = a commandé dans la période précédente et recommande dans celle-ci. Revenant = client plus ancien absent de la période précédente.</p>
+    </div>
+    <div class="card p-6">
+        <h2 class="text-base font-bold text-slate-900">Niveaux de clients</h2>
+        <p class="text-sm text-slate-500">Selon le nombre de commandes (VIP : 5+, Fidèle : 2 à 4)</p>
+        <ul id="loy-tiers" class="mt-4 space-y-3"></ul>
+    </div>
+</div>
+
 <div class="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
     <div class="card p-6">
         <div class="mb-4 flex items-center justify-between">
@@ -355,6 +451,7 @@
     const STATUTS = @json($statuts);
     const STATS_URL = @json(route('dashboard.stats'));
     const CONTACT_URL = @json(url('/contacts'));
+    const LOYALTY_URL = @json(route('dashboard.loyalty'));
     const RANGES = { day: [7, 30, 90], month: [6, 12, 24], year: [3, 5, 10] };
     const DEFAULT_RANGE = { day: 30, month: 12, year: 5 };
     const UNIT = { day: 'jours', month: 'mois', year: 'ans' };
@@ -433,6 +530,41 @@
         },
         options: { responsive: true, maintainAspectRatio: false, cutout: '70%', plugins: { legend: { display: false } } },
     });
+
+    function comboOptions(titlesFn) {
+    return {
+        responsive: true,
+        maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+            legend: { display: true, position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } },
+            tooltip: {
+                backgroundColor: '#0f172a', padding: 10, cornerRadius: 8,
+                callbacks: {
+                    title: items => titlesFn()[items[0].dataIndex] || '',
+                    label: ctx => ctx.dataset.label + ' : ' + (ctx.parsed.y === null ? '—' : nf.format(ctx.parsed.y)),
+                },
+            },
+        },
+        scales: {
+            x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
+            y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' }, border: { display: false } },
+            y1: { position: 'right', min: 0, max: 100, grid: { display: false }, border: { display: false }, ticks: { callback: v => v + ' %' } },
+        },
+    };
+}
+
+const convChart = new Chart($('conv-chart'), {
+    type: 'bar', data: { labels: [], datasets: [] }, options: comboOptions(() => (data && data.titles) || []),
+});
+
+const loy = { months: 3, data: null, req: 0 };
+const loyOpts = comboOptions(() => (loy.data && loy.data.titles) || []);
+loyOpts.scales.x.stacked = true;
+loyOpts.scales.y.stacked = true;
+const loyChart = new Chart($('loy-chart'), {
+    type: 'bar', data: { labels: [], datasets: [] }, options: loyOpts,
+});
 
     function dataset(label, values, color) {
         return { label, data: values, backgroundColor: color, borderRadius: 3, borderSkipped: false, maxBarThickness: 32 };
@@ -616,15 +748,14 @@
             a.textContent = c.name;
             const sub = document.createElement('div');
             sub.className = 'text-xs text-slate-500';
-            sub.textContent = nf.format(c.commandes) + ' commande' + (c.commandes > 1 ? 's' : '');
+sub.textContent = c.total ? nf.format(c.total) + ' Ar' : '';
             info.appendChild(a);
             info.appendChild(sub);
             left.appendChild(info);
 
             const right = document.createElement('span');
             right.className = 'shrink-0 text-sm font-semibold text-slate-900';
-            right.textContent = c.total ? nf.format(c.total) + ' Ar' : '';
-
+right.textContent = nf.format(c.commandes) + ' commande' + (c.commandes > 1 ? 's' : '');
             li.appendChild(left);
             li.appendChild(right);
             clients.appendChild(li);
@@ -668,12 +799,140 @@
         });
     }
 
+    function line(label, values, color) {
+    return {
+        type: 'line', label, data: values, borderColor: color, backgroundColor: color,
+        tension: 0.3, spanGaps: true, pointRadius: 3, borderWidth: 2, yAxisID: 'y1', order: 0,
+    };
+}
+
+function bars(label, values, color, stack) {
+    const d = dataset(label, values, color);
+    d.yAxisID = 'y';
+    if (stack) d.stack = stack;
+    return d;
+}
+
+function progressRow(label, color, text, pct) {
+    const li = document.createElement('li');
+    const top = document.createElement('div');
+    top.className = 'mb-1 flex items-center justify-between gap-3 text-sm';
+    const l = document.createElement('span');
+    l.className = 'font-medium text-slate-900';
+    l.textContent = label;
+    const r = document.createElement('span');
+    r.className = 'shrink-0 font-semibold text-slate-700';
+    r.textContent = text;
+    top.appendChild(l);
+    top.appendChild(r);
+    const piste = document.createElement('div');
+    piste.className = 'h-1.5 w-full rounded-full bg-slate-100';
+    const barre = document.createElement('div');
+    barre.className = 'h-1.5 rounded-full';
+    barre.style.background = color;
+    barre.style.width = Math.min(100, pct) + '%';
+    piste.appendChild(barre);
+    li.appendChild(top);
+    li.appendChild(piste);
+    return li;
+}
+
+function renderConversion() {
+    const c = data.conversion;
+    convChart.data.labels = data.labels;
+    convChart.data.datasets = [
+        bars('Nouveaux contacts', c.contacts, '#cbd5e1'),
+        bars('Ont commandé', c.converted, '#10b981'),
+        line('Taux de conversion (%)', c.rate, '#2563eb'),
+    ];
+    convChart.update();
+
+    const total = sum(c.contacts), conv = sum(c.converted);
+    $('conv-total').textContent = nf.format(total);
+    $('conv-conv').textContent = nf.format(conv);
+    $('conv-rate').textContent = total ? (Math.round(conv / total * 1000) / 10).toString().replace('.', ',') + ' %' : '—';
+    $('conv-empty').classList.toggle('hidden', total > 0);
+    $('conv-empty').classList.toggle('flex', total === 0);
+
+    const ul = $('conv-sources');
+    ul.innerHTML = '';
+    if (!c.sources.length) {
+        const li = document.createElement('li');
+        li.className = 'text-sm text-slate-500';
+        li.textContent = 'Aucun contact sur cette période.';
+        ul.appendChild(li);
+    }
+    c.sources.slice().sort((a, b) => b.rate - a.rate).forEach(s => {
+        const def = SOURCES.find(x => x.key === s.key) || { label: s.key, color: '#94a3b8' };
+        ul.appendChild(progressRow(
+            def.label, def.color,
+            String(s.rate).replace('.', ',') + ' % (' + s.converted + '/' + s.total + ')',
+            s.rate
+        ));
+    });
+}
+
+function renderLoyalty() {
+    const d = loy.data;
+    loyChart.data.labels = d.labels;
+    loyChart.data.datasets = [
+        bars('Fidèles', d.retained, '#2563eb', 'a'),
+        bars('Revenants', d.back, '#f59e0b', 'a'),
+        bars('Nouveaux', d.new, '#10b981', 'a'),
+        line('Taux de fidélité (%)', d.rate, '#7c3aed'),
+    ];
+    loyChart.update();
+
+    const n = d.rate.length - 1;
+    const last = n >= 0 ? d.rate[n] : null;
+    $('loy-rate').textContent = last === null ? '—' : String(last).replace('.', ',') + ' %';
+    $('loy-retained').textContent = nf.format(n >= 0 ? d.retained[n] : 0);
+    $('loy-prev').textContent = nf.format(n >= 0 ? d.retained[n] + d.lost[n] : 0);
+
+    const any = sum(d.active) > 0;
+    $('loy-empty').classList.toggle('hidden', any);
+    $('loy-empty').classList.toggle('flex', !any);
+
+    const tiers = [
+        ['VIP (5 commandes et +)', '#7c3aed', d.tiers.vip],
+        ['Fidèles (2 à 4)', '#10b981', d.tiers.fidele],
+        ['Nouveaux (1)', '#94a3b8', d.tiers.nouveau],
+    ];
+    const tot = Math.max(1, d.clients);
+    const ul = $('loy-tiers');
+    ul.innerHTML = '';
+    tiers.forEach(t => ul.appendChild(progressRow(t[0], t[1], nf.format(t[2]) + ' · ' + Math.round(t[2] / tot * 100) + ' %', t[2] / tot * 100)));
+}
+
+async function loadLoyalty() {
+    const id = ++loy.req;
+    document.querySelectorAll('#loy-seg [data-months]').forEach(b =>
+        b.classList.toggle('is-active', parseInt(b.dataset.months, 10) === loy.months));
+    try {
+        const res = await fetch(LOYALTY_URL + '?months=' + loy.months, {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+            credentials: 'same-origin',
+        });
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        const json = await res.json();
+        if (id !== loy.req) return;
+        loy.data = json;
+        renderLoyalty();
+    } catch (e) { /* silencieux : le reste du tableau de bord reste utilisable */ }
+}
+
+document.querySelectorAll('#loy-seg [data-months]').forEach(b => b.addEventListener('click', () => {
+    loy.months = parseInt(b.dataset.months, 10);
+    loadLoyalty();
+}));
+
     function renderAll() {
         renderContacts();
         renderOrigin();
         renderMessages();
         renderCommandes();
         renderTops();
+        renderConversion();
     }
 
     function syncControls() {
@@ -759,6 +1018,7 @@
 
     syncControls();
     load();
+    loadLoyalty();
 })();
 </script>
 @endpush
