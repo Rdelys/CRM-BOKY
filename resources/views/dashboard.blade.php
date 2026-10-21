@@ -20,6 +20,8 @@
 
     $firstName = \Illuminate\Support\Str::before((string) auth()->user()->name, ' ');
 
+    $partClients = $stats['contacts'] > 0 ? round($stats['clients'] / $stats['contacts'] * 100, 1) : null;
+
     $trend = function (?float $v, string $suffix) {
         if ($v === null) {
             return '<span class="text-xs text-slate-400">Pas de comparaison</span>';
@@ -47,22 +49,45 @@
     </div>
 </div>
 
-{{-- KPI contacts --}}
-<div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 p-5 text-white shadow-lg shadow-blue-600/20">
+{{-- Grandes cartes : Contacts et Clients --}}
+<div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+    {{-- Contacts --}}
+    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 p-6 text-white shadow-lg shadow-blue-600/20">
         <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10"></div>
         <div class="absolute -bottom-10 right-10 h-24 w-24 rounded-full bg-white/5"></div>
         <div class="relative">
             <div class="text-xs font-semibold uppercase tracking-wider text-blue-100">Contacts</div>
-            <div class="mt-2 text-4xl font-bold">{{ number_format($stats['contacts'], 0, ',', ' ') }}</div>
-            <div class="mt-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-blue-100">
+            <div class="mt-2 text-5xl font-bold">{{ number_format($stats['contacts'], 0, ',', ' ') }}</div>
+            <div class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-blue-100">
                 <span><strong class="text-white">{{ $stats['prospects'] }}</strong> prospects</span>
-                <span><strong class="text-white">{{ $stats['clients'] }}</strong> clients</span>
                 <span><strong class="text-white">{{ $stats['reachable'] }}</strong> Messenger joignables</span>
             </div>
         </div>
     </div>
 
+    {{-- Clients --}}
+    <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-600 to-teal-700 p-6 text-white shadow-lg shadow-emerald-600/20">
+        <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10"></div>
+        <div class="absolute -bottom-10 right-10 h-24 w-24 rounded-full bg-white/5"></div>
+        <div class="relative">
+            <div class="flex items-start justify-between gap-3">
+                <div class="text-xs font-semibold uppercase tracking-wider text-emerald-100">Clients</div>
+                <a href="{{ route('commandes.classement') }}" class="text-xs font-medium text-emerald-100 underline-offset-2 hover:text-white hover:underline">Meilleurs clients</a>
+            </div>
+            <div class="mt-2 text-5xl font-bold">{{ number_format($stats['clients'], 0, ',', ' ') }}</div>
+            <div class="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-emerald-100">
+                <span>
+                    <strong class="text-white">{{ $partClients !== null ? number_format($partClients, 1, ',', ' ') . ' %' : '—' }}</strong>
+                    des contacts
+                </span>
+                <span><strong class="text-white">{{ $stats['repeat_clients'] }}</strong> récurrents (2 commandes et +)</span>
+            </div>
+        </div>
+    </div>
+</div>
+
+{{-- Petites cartes contacts --}}
+<div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
     <div class="card p-5">
         <div class="flex items-center justify-between">
             <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Nouveaux aujourd'hui</span>
@@ -532,39 +557,39 @@
     });
 
     function comboOptions(titlesFn) {
-    return {
-        responsive: true,
-        maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-            legend: { display: true, position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } },
-            tooltip: {
-                backgroundColor: '#0f172a', padding: 10, cornerRadius: 8,
-                callbacks: {
-                    title: items => titlesFn()[items[0].dataIndex] || '',
-                    label: ctx => ctx.dataset.label + ' : ' + (ctx.parsed.y === null ? '—' : nf.format(ctx.parsed.y)),
+        return {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            plugins: {
+                legend: { display: true, position: 'bottom', labels: { boxWidth: 10, usePointStyle: true } },
+                tooltip: {
+                    backgroundColor: '#0f172a', padding: 10, cornerRadius: 8,
+                    callbacks: {
+                        title: items => titlesFn()[items[0].dataIndex] || '',
+                        label: ctx => ctx.dataset.label + ' : ' + (ctx.parsed.y === null ? '—' : nf.format(ctx.parsed.y)),
+                    },
                 },
             },
-        },
-        scales: {
-            x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
-            y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' }, border: { display: false } },
-            y1: { position: 'right', min: 0, max: 100, grid: { display: false }, border: { display: false }, ticks: { callback: v => v + ' %' } },
-        },
-    };
-}
+            scales: {
+                x: { grid: { display: false }, ticks: { maxRotation: 0, autoSkip: true, maxTicksLimit: 12 } },
+                y: { beginAtZero: true, ticks: { precision: 0 }, grid: { color: '#f1f5f9' }, border: { display: false } },
+                y1: { position: 'right', min: 0, max: 100, grid: { display: false }, border: { display: false }, ticks: { callback: v => v + ' %' } },
+            },
+        };
+    }
 
-const convChart = new Chart($('conv-chart'), {
-    type: 'bar', data: { labels: [], datasets: [] }, options: comboOptions(() => (data && data.titles) || []),
-});
+    const convChart = new Chart($('conv-chart'), {
+        type: 'bar', data: { labels: [], datasets: [] }, options: comboOptions(() => (data && data.titles) || []),
+    });
 
-const loy = { months: 3, data: null, req: 0 };
-const loyOpts = comboOptions(() => (loy.data && loy.data.titles) || []);
-loyOpts.scales.x.stacked = true;
-loyOpts.scales.y.stacked = true;
-const loyChart = new Chart($('loy-chart'), {
-    type: 'bar', data: { labels: [], datasets: [] }, options: loyOpts,
-});
+    const loy = { months: 3, data: null, req: 0 };
+    const loyOpts = comboOptions(() => (loy.data && loy.data.titles) || []);
+    loyOpts.scales.x.stacked = true;
+    loyOpts.scales.y.stacked = true;
+    const loyChart = new Chart($('loy-chart'), {
+        type: 'bar', data: { labels: [], datasets: [] }, options: loyOpts,
+    });
 
     function dataset(label, values, color) {
         return { label, data: values, backgroundColor: color, borderRadius: 3, borderSkipped: false, maxBarThickness: 32 };
@@ -748,14 +773,14 @@ const loyChart = new Chart($('loy-chart'), {
             a.textContent = c.name;
             const sub = document.createElement('div');
             sub.className = 'text-xs text-slate-500';
-sub.textContent = c.total ? nf.format(c.total) + ' Ar' : '';
+            sub.textContent = c.total ? nf.format(c.total) + ' Ar' : '';
             info.appendChild(a);
             info.appendChild(sub);
             left.appendChild(info);
 
             const right = document.createElement('span');
             right.className = 'shrink-0 text-sm font-semibold text-slate-900';
-right.textContent = nf.format(c.commandes) + ' commande' + (c.commandes > 1 ? 's' : '');
+            right.textContent = nf.format(c.commandes) + ' commande' + (c.commandes > 1 ? 's' : '');
             li.appendChild(left);
             li.appendChild(right);
             clients.appendChild(li);
@@ -800,131 +825,131 @@ right.textContent = nf.format(c.commandes) + ' commande' + (c.commandes > 1 ? 's
     }
 
     function line(label, values, color) {
-    return {
-        type: 'line', label, data: values, borderColor: color, backgroundColor: color,
-        tension: 0.3, spanGaps: true, pointRadius: 3, borderWidth: 2, yAxisID: 'y1', order: 0,
-    };
-}
-
-function bars(label, values, color, stack) {
-    const d = dataset(label, values, color);
-    d.yAxisID = 'y';
-    if (stack) d.stack = stack;
-    return d;
-}
-
-function progressRow(label, color, text, pct) {
-    const li = document.createElement('li');
-    const top = document.createElement('div');
-    top.className = 'mb-1 flex items-center justify-between gap-3 text-sm';
-    const l = document.createElement('span');
-    l.className = 'font-medium text-slate-900';
-    l.textContent = label;
-    const r = document.createElement('span');
-    r.className = 'shrink-0 font-semibold text-slate-700';
-    r.textContent = text;
-    top.appendChild(l);
-    top.appendChild(r);
-    const piste = document.createElement('div');
-    piste.className = 'h-1.5 w-full rounded-full bg-slate-100';
-    const barre = document.createElement('div');
-    barre.className = 'h-1.5 rounded-full';
-    barre.style.background = color;
-    barre.style.width = Math.min(100, pct) + '%';
-    piste.appendChild(barre);
-    li.appendChild(top);
-    li.appendChild(piste);
-    return li;
-}
-
-function renderConversion() {
-    const c = data.conversion;
-    convChart.data.labels = data.labels;
-    convChart.data.datasets = [
-        bars('Nouveaux contacts', c.contacts, '#cbd5e1'),
-        bars('Ont commandé', c.converted, '#10b981'),
-        line('Taux de conversion (%)', c.rate, '#2563eb'),
-    ];
-    convChart.update();
-
-    const total = sum(c.contacts), conv = sum(c.converted);
-    $('conv-total').textContent = nf.format(total);
-    $('conv-conv').textContent = nf.format(conv);
-    $('conv-rate').textContent = total ? (Math.round(conv / total * 1000) / 10).toString().replace('.', ',') + ' %' : '—';
-    $('conv-empty').classList.toggle('hidden', total > 0);
-    $('conv-empty').classList.toggle('flex', total === 0);
-
-    const ul = $('conv-sources');
-    ul.innerHTML = '';
-    if (!c.sources.length) {
-        const li = document.createElement('li');
-        li.className = 'text-sm text-slate-500';
-        li.textContent = 'Aucun contact sur cette période.';
-        ul.appendChild(li);
+        return {
+            type: 'line', label, data: values, borderColor: color, backgroundColor: color,
+            tension: 0.3, spanGaps: true, pointRadius: 3, borderWidth: 2, yAxisID: 'y1', order: 0,
+        };
     }
-    c.sources.slice().sort((a, b) => b.rate - a.rate).forEach(s => {
-        const def = SOURCES.find(x => x.key === s.key) || { label: s.key, color: '#94a3b8' };
-        ul.appendChild(progressRow(
-            def.label, def.color,
-            String(s.rate).replace('.', ',') + ' % (' + s.converted + '/' + s.total + ')',
-            s.rate
-        ));
-    });
-}
 
-function renderLoyalty() {
-    const d = loy.data;
-    loyChart.data.labels = d.labels;
-    loyChart.data.datasets = [
-        bars('Fidèles', d.retained, '#2563eb', 'a'),
-        bars('Revenants', d.back, '#f59e0b', 'a'),
-        bars('Nouveaux', d.new, '#10b981', 'a'),
-        line('Taux de fidélité (%)', d.rate, '#7c3aed'),
-    ];
-    loyChart.update();
+    function bars(label, values, color, stack) {
+        const d = dataset(label, values, color);
+        d.yAxisID = 'y';
+        if (stack) d.stack = stack;
+        return d;
+    }
 
-    const n = d.rate.length - 1;
-    const last = n >= 0 ? d.rate[n] : null;
-    $('loy-rate').textContent = last === null ? '—' : String(last).replace('.', ',') + ' %';
-    $('loy-retained').textContent = nf.format(n >= 0 ? d.retained[n] : 0);
-    $('loy-prev').textContent = nf.format(n >= 0 ? d.retained[n] + d.lost[n] : 0);
+    function progressRow(label, color, text, pct) {
+        const li = document.createElement('li');
+        const top = document.createElement('div');
+        top.className = 'mb-1 flex items-center justify-between gap-3 text-sm';
+        const l = document.createElement('span');
+        l.className = 'font-medium text-slate-900';
+        l.textContent = label;
+        const r = document.createElement('span');
+        r.className = 'shrink-0 font-semibold text-slate-700';
+        r.textContent = text;
+        top.appendChild(l);
+        top.appendChild(r);
+        const piste = document.createElement('div');
+        piste.className = 'h-1.5 w-full rounded-full bg-slate-100';
+        const barre = document.createElement('div');
+        barre.className = 'h-1.5 rounded-full';
+        barre.style.background = color;
+        barre.style.width = Math.min(100, pct) + '%';
+        piste.appendChild(barre);
+        li.appendChild(top);
+        li.appendChild(piste);
+        return li;
+    }
 
-    const any = sum(d.active) > 0;
-    $('loy-empty').classList.toggle('hidden', any);
-    $('loy-empty').classList.toggle('flex', !any);
+    function renderConversion() {
+        const c = data.conversion;
+        convChart.data.labels = data.labels;
+        convChart.data.datasets = [
+            bars('Nouveaux contacts', c.contacts, '#cbd5e1'),
+            bars('Ont commandé', c.converted, '#10b981'),
+            line('Taux de conversion (%)', c.rate, '#2563eb'),
+        ];
+        convChart.update();
 
-    const tiers = [
-        ['VIP (5 commandes et +)', '#7c3aed', d.tiers.vip],
-        ['Fidèles (2 à 4)', '#10b981', d.tiers.fidele],
-        ['Nouveaux (1)', '#94a3b8', d.tiers.nouveau],
-    ];
-    const tot = Math.max(1, d.clients);
-    const ul = $('loy-tiers');
-    ul.innerHTML = '';
-    tiers.forEach(t => ul.appendChild(progressRow(t[0], t[1], nf.format(t[2]) + ' · ' + Math.round(t[2] / tot * 100) + ' %', t[2] / tot * 100)));
-}
+        const total = sum(c.contacts), conv = sum(c.converted);
+        $('conv-total').textContent = nf.format(total);
+        $('conv-conv').textContent = nf.format(conv);
+        $('conv-rate').textContent = total ? (Math.round(conv / total * 1000) / 10).toString().replace('.', ',') + ' %' : '—';
+        $('conv-empty').classList.toggle('hidden', total > 0);
+        $('conv-empty').classList.toggle('flex', total === 0);
 
-async function loadLoyalty() {
-    const id = ++loy.req;
-    document.querySelectorAll('#loy-seg [data-months]').forEach(b =>
-        b.classList.toggle('is-active', parseInt(b.dataset.months, 10) === loy.months));
-    try {
-        const res = await fetch(LOYALTY_URL + '?months=' + loy.months, {
-            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin',
+        const ul = $('conv-sources');
+        ul.innerHTML = '';
+        if (!c.sources.length) {
+            const li = document.createElement('li');
+            li.className = 'text-sm text-slate-500';
+            li.textContent = 'Aucun contact sur cette période.';
+            ul.appendChild(li);
+        }
+        c.sources.slice().sort((a, b) => b.rate - a.rate).forEach(s => {
+            const def = SOURCES.find(x => x.key === s.key) || { label: s.key, color: '#94a3b8' };
+            ul.appendChild(progressRow(
+                def.label, def.color,
+                String(s.rate).replace('.', ',') + ' % (' + s.converted + '/' + s.total + ')',
+                s.rate
+            ));
         });
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        const json = await res.json();
-        if (id !== loy.req) return;
-        loy.data = json;
-        renderLoyalty();
-    } catch (e) { /* silencieux : le reste du tableau de bord reste utilisable */ }
-}
+    }
 
-document.querySelectorAll('#loy-seg [data-months]').forEach(b => b.addEventListener('click', () => {
-    loy.months = parseInt(b.dataset.months, 10);
-    loadLoyalty();
-}));
+    function renderLoyalty() {
+        const d = loy.data;
+        loyChart.data.labels = d.labels;
+        loyChart.data.datasets = [
+            bars('Fidèles', d.retained, '#2563eb', 'a'),
+            bars('Revenants', d.back, '#f59e0b', 'a'),
+            bars('Nouveaux', d.new, '#10b981', 'a'),
+            line('Taux de fidélité (%)', d.rate, '#7c3aed'),
+        ];
+        loyChart.update();
+
+        const n = d.rate.length - 1;
+        const last = n >= 0 ? d.rate[n] : null;
+        $('loy-rate').textContent = last === null ? '—' : String(last).replace('.', ',') + ' %';
+        $('loy-retained').textContent = nf.format(n >= 0 ? d.retained[n] : 0);
+        $('loy-prev').textContent = nf.format(n >= 0 ? d.retained[n] + d.lost[n] : 0);
+
+        const any = sum(d.active) > 0;
+        $('loy-empty').classList.toggle('hidden', any);
+        $('loy-empty').classList.toggle('flex', !any);
+
+        const tiers = [
+            ['VIP (5 commandes et +)', '#7c3aed', d.tiers.vip],
+            ['Fidèles (2 à 4)', '#10b981', d.tiers.fidele],
+            ['Nouveaux (1)', '#94a3b8', d.tiers.nouveau],
+        ];
+        const tot = Math.max(1, d.clients);
+        const ul = $('loy-tiers');
+        ul.innerHTML = '';
+        tiers.forEach(t => ul.appendChild(progressRow(t[0], t[1], nf.format(t[2]) + ' · ' + Math.round(t[2] / tot * 100) + ' %', t[2] / tot * 100)));
+    }
+
+    async function loadLoyalty() {
+        const id = ++loy.req;
+        document.querySelectorAll('#loy-seg [data-months]').forEach(b =>
+            b.classList.toggle('is-active', parseInt(b.dataset.months, 10) === loy.months));
+        try {
+            const res = await fetch(LOYALTY_URL + '?months=' + loy.months, {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const json = await res.json();
+            if (id !== loy.req) return;
+            loy.data = json;
+            renderLoyalty();
+        } catch (e) { /* silencieux : le reste du tableau de bord reste utilisable */ }
+    }
+
+    document.querySelectorAll('#loy-seg [data-months]').forEach(b => b.addEventListener('click', () => {
+        loy.months = parseInt(b.dataset.months, 10);
+        loadLoyalty();
+    }));
 
     function renderAll() {
         renderContacts();
