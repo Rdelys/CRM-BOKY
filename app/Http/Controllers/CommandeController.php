@@ -12,6 +12,7 @@ use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class CommandeController extends Controller
 {
@@ -456,6 +457,7 @@ class CommandeController extends Controller
             ];
         } else {
             $regles['contact_id'] = 'required|exists:contacts,id';
+            $regles['contact_telephone'] = 'nullable|string|max:30';
         }
 
         return $request->validate($regles, [
@@ -475,6 +477,7 @@ class CommandeController extends Controller
             'nouveau_telephone' => 'téléphone',
             'nouveau_email'     => 'email',
             'nouveau_ville'     => 'ville',
+            'contact_telephone' => 'téléphone du client',
             'nouveau_source'    => 'origine',
             'date_commande'     => 'horodateur',
             'adresse_livraison' => 'adresse de livraison',
@@ -510,7 +513,20 @@ class CommandeController extends Controller
     private function resoudreContact(array $v): Contact
     {
         if ($v['mode_contact'] === 'existant') {
-            return Contact::findOrFail($v['contact_id']);
+            $contact = Contact::findOrFail($v['contact_id']);
+
+            $phone = Contact::normalizePhone($v['contact_telephone'] ?? null);
+            if ($phone && $phone !== $contact->phone) {
+                $pris = Contact::where('phone', $phone)->where('id', '!=', $contact->id)->exists();
+                if ($pris) {
+                    throw ValidationException::withMessages([
+                        'contact_telephone' => 'Ce numéro appartient déjà à un autre client.',
+                    ]);
+                }
+                $contact->update(['phone' => $phone]);
+            }
+
+            return $contact;
         }
 
         $phone = Contact::normalizePhone($v['nouveau_telephone'] ?? null);

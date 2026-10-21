@@ -48,6 +48,13 @@
                 <input type="text" id="contact-search" class="input" autocomplete="off" placeholder="Tapez pour rechercher…">
                 <ul id="contact-results" class="absolute z-20 mt-1 hidden max-h-64 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg"></ul>
             </div>
+            <div class="mt-4 sm:max-w-sm">
+                <label class="label" for="contact_telephone">Téléphone du client</label>
+                <input type="text" id="contact_telephone" name="contact_telephone"
+                    value="{{ old('contact_telephone', $contact?->phone) }}"
+                    class="input" maxlength="30" placeholder="032 12 345 67">
+                <p class="mt-1 text-xs text-slate-400">Ajoutez ou corrigez le numéro : il sera enregistré sur la fiche du client.</p>
+            </div>
         </div>
 
         {{-- Nouveau client --}}
@@ -177,6 +184,7 @@
     function choisir(c) {
         $('contact_id').value = c.id;
         $('sel-nom').textContent = c.name;
+        $('contact_telephone').value = c.phone || '';   // ← ajout
         $('sel-info').textContent = [c.phone, c.email, c.status].filter(Boolean).join(' · ');
         $('contact-selected').classList.remove('hidden');
         $('contact-selected').classList.add('flex');
@@ -240,6 +248,7 @@
 
     $('contact-change').addEventListener('click', () => {
         $('contact_id').value = '';
+        $('contact_telephone').value = '';              // ← ajout
         $('contact-selected').classList.add('hidden');
         $('contact-selected').classList.remove('flex');
         $('contact-picker').classList.remove('hidden');
