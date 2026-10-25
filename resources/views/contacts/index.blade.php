@@ -6,12 +6,13 @@
     <div>
         <h1 class="text-2xl font-bold text-slate-900">Contacts</h1>
         <p class="text-sm text-slate-500">{{ $contacts->total() }} contact(s) au total</p>
+        <a href="{{ route('contacts.index', ['reset' => 1]) }}" class="text-xs font-medium text-blue-600 hover:text-blue-800">
+            Réinitialiser (page 1, sans filtre)
+        </a>
     </div>
     <div class="flex flex-wrap gap-2">
         <a href="{{ route('contacts.import.form') }}" class="btn-outline">Importer CSV</a>
-<a href="{{ route('commandes.create') }}" class="btn-outline">
-    Nouvelle commande
-</a>
+        <a href="{{ route('commandes.create') }}" class="btn-outline">Nouvelle commande</a>
         <a href="{{ route('contacts.create') }}" class="btn-primary">
             <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
             Nouveau contact
@@ -36,11 +37,31 @@
     <button class="btn-dark md:col-span-1">Filtrer</button>
 </form>
 
+{{-- Formulaire de suppression multiple (vide : les cases à cocher s'y rattachent via form="bulk-form") --}}
+<form id="bulk-form" method="POST" action="{{ route('contacts.bulk-destroy') }}"
+      onsubmit="return confirm('Supprimer définitivement les contacts sélectionnés ?')">
+    @csrf
+</form>
+
+{{-- Barre d'actions groupées --}}
+<div id="bulk-bar" class="mb-3 hidden items-center justify-between rounded-lg border border-red-200 bg-red-50 px-4 py-3">
+    <span class="text-sm font-medium text-red-800">
+        <span id="bulk-count">0</span> contact(s) sélectionné(s)
+    </span>
+    <button type="submit" form="bulk-form"
+            class="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-red-700">
+        Supprimer la sélection
+    </button>
+</div>
+
 <div class="card overflow-hidden">
     <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-slate-200">
             <thead class="bg-slate-50">
             <tr>
+                <th class="th w-10">
+                    <input type="checkbox" id="select-all" class="h-4 w-4 rounded border-slate-300" title="Tout sélectionner (cette page)">
+                </th>
                 <th class="th">Contact</th>
                 <th class="th">Téléphone</th>
                 <th class="th">Email</th>
@@ -52,6 +73,10 @@
             <tbody class="divide-y divide-slate-100">
             @forelse($contacts as $contact)
                 <tr class="transition hover:bg-slate-50">
+                    <td class="td">
+                        <input type="checkbox" name="ids[]" value="{{ $contact->id }}" form="bulk-form"
+                               class="row-check h-4 w-4 rounded border-slate-300">
+                    </td>
                     <td class="td">
                         <div class="flex items-center gap-3">
                             <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-sm font-semibold text-blue-700">
@@ -96,7 +121,7 @@
                 </tr>
             @empty
                 <tr>
-                    <td colspan="6" class="px-5 py-14 text-center">
+                    <td colspan="7" class="px-5 py-14 text-center">
                         <p class="font-medium text-slate-700">Aucun contact pour le moment</p>
                         <p class="mt-1 text-sm text-slate-500">Ajoutez-en un ou importez un fichier CSV.</p>
                     </td>
@@ -108,4 +133,32 @@
 </div>
 
 <div class="mt-5">{{ $contacts->links() }}</div>
+
+<script>
+(function () {
+    const selectAll = document.getElementById('select-all');
+    const bar = document.getElementById('bulk-bar');
+    const count = document.getElementById('bulk-count');
+    const boxes = () => Array.from(document.querySelectorAll('.row-check'));
+
+    function refresh() {
+        const checked = boxes().filter(b => b.checked).length;
+        const total = boxes().length;
+        count.textContent = checked;
+        bar.classList.toggle('hidden', checked === 0);
+        bar.classList.toggle('flex', checked > 0);
+        selectAll.checked = total > 0 && checked === total;
+        selectAll.indeterminate = checked > 0 && checked < total;
+    }
+
+    selectAll.addEventListener('change', () => {
+        boxes().forEach(b => b.checked = selectAll.checked);
+        refresh();
+    });
+    boxes().forEach(b => b.addEventListener('change', refresh));
+
+    // Cases potentiellement restaurées par le navigateur (bouton retour)
+    refresh();
+})();
+</script>
 @endsection

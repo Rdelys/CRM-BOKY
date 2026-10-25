@@ -7,24 +7,91 @@ use Carbon\Carbon;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Str;
+use Throwable;
 
 class SyncFacebookConversations extends Command
 {
     protected $signature = 'crm:sync-facebook
         {--full : Relit toutes les conversations (ignore le dernier point de synchro)}
-        {--limit=0 : Nombre max de conversations (0 = illimité)}';
+        {--limit=0 : Nombre max de conversations (0 = illimité)}
+        {--run= : Identifiant de lancement (fourni par le bouton manuel du CRM)}';
 
     protected $description = 'Importe les personnes qui ont écrit à la Page Facebook';
 
     private const CACHE_KEY = 'crm.facebook.last_sync';
+    public const STATUS_KEY = 'crm.facebook.status';
+    private const LOCK_KEY  = 'crm.facebook.sync.lock';
+
+    /** État affiché dans le toast du CRM. */
+    private array $status = [];
 
     public function handle(): int
+    {
+        $manual = (bool) $this->option('run');
+
+        $this->status = [
+            'run_id'      => $this->option('run') ?: (string) Str::uuid(),
+            'trigger'     => $manual ? 'manual' : 'schedule',
+            'state'       => 'running',
+            'created'     => 0,
+            'updated'     => 0,
+            'errors'      => 0,
+            'seen'        => 0,
+            'pages'       => 0,
+            'complete'    => true,
+            'message'     => null,
+            'started_at'  => now()->toIso8601String(),
+            'finished_at' => null,
+        ];
+
+        // Une seule synchro à la fois (planifiée ou manuelle)
+        $lock = Cache::lock(self::LOCK_KEY, 660);
+
+        if (!$lock->get()) {
+            $this->warn('Une synchronisation est déjà en cours.');
+
+            if ($manual) {
+                $this->report([
+                    'state'       => 'failed',
+                    'message'     => 'Une synchronisation est déjà en cours.',
+                    'finished_at' => now()->toIso8601String(),
+                ]);
+            }
+
+            return self::SUCCESS;
+        }
+
+        try {
+            $this->report([]);
+
+            return $this->sync();
+        } catch (Throwable $e) {
+            $this->error($e->getMessage());
+            $this->report([
+                'state'       => 'failed',
+                'message'     => 'Erreur : ' . Str::limit($e->getMessage(), 200),
+                'finished_at' => now()->toIso8601String(),
+            ]);
+
+            return self::FAILURE;
+        } finally {
+            $lock->release();
+        }
+    }
+
+    private function sync(): int
     {
         $cfg = config('crm.facebook');
         $pageId = (string) $cfg['page_id'];
 
         if (!$cfg['page_token'] || $pageId === '') {
             $this->error('FB_PAGE_TOKEN ou FB_PAGE_ID manquant dans le .env');
+            $this->report([
+                'state'       => 'failed',
+                'message'     => 'FB_PAGE_TOKEN ou FB_PAGE_ID manquant dans le .env',
+                'finished_at' => now()->toIso8601String(),
+            ]);
 
             return self::FAILURE;
         }
@@ -46,6 +113,7 @@ class SyncFacebookConversations extends Command
         $seen = 0;
         $created = 0;
         $updated = 0;
+        $errors = 0;
         $complete = true;
 
         do {
@@ -60,6 +128,17 @@ class SyncFacebookConversations extends Command
 
             if ($response->failed()) {
                 $this->error('Facebook : HTTP ' . $response->status() . ' ' . $response->body());
+                $this->report([
+                    'state'       => 'failed',
+                    'created'     => $created,
+                    'updated'     => $updated,
+                    'errors'      => $errors,
+                    'seen'        => $seen,
+                    'pages'       => $pages,
+                    'message'     => 'Facebook a refusé la requête (HTTP ' . $response->status() . ') : '
+                        . Str::limit((string) ($response->json('error.message') ?? 'erreur inconnue'), 160),
+                    'finished_at' => now()->toIso8601String(),
+                ]);
 
                 return self::FAILURE; // le point de synchro n'avance pas
             }
@@ -100,26 +179,40 @@ class SyncFacebookConversations extends Command
                         continue;
                     }
 
-                    $contact = Contact::firstOrNew(['facebook_psid' => $psid]);
-                    $isNew = !$contact->exists;
+                    try {
+                        $contact = Contact::firstOrNew(['facebook_psid' => $psid]);
+                        $isNew = !$contact->exists;
 
-                    if ($isNew) {
-                        $contact->fill([
-                            'name'   => mb_substr($p['name'] ?? 'Contact Facebook', 0, 120),
-                            'source' => 'facebook',
-                            'status' => 'prospect',
-                        ]);
+                        if ($isNew) {
+                            $contact->fill([
+                                'name'   => mb_substr($p['name'] ?? 'Contact Facebook', 0, 120),
+                                'source' => 'facebook',
+                                'status' => 'prospect',
+                            ]);
+                        }
+
+                        if ($lastUserMessageAt
+                            && (!$contact->last_fb_interaction_at || $lastUserMessageAt->gt($contact->last_fb_interaction_at))) {
+                            $contact->last_fb_interaction_at = $lastUserMessageAt;
+                        }
+
+                        $contact->save();
+                        $isNew ? $created++ : $updated++;
+                    } catch (Throwable $e) {
+                        $errors++;
+                        $this->warn("Contact {$psid} ignoré : " . $e->getMessage());
                     }
-
-                    if ($lastUserMessageAt
-                        && (!$contact->last_fb_interaction_at || $lastUserMessageAt->gt($contact->last_fb_interaction_at))) {
-                        $contact->last_fb_interaction_at = $lastUserMessageAt;
-                    }
-
-                    $contact->save();
-                    $isNew ? $created++ : $updated++;
                 }
             }
+
+            // Avancement en direct pour le toast
+            $this->report([
+                'created' => $created,
+                'updated' => $updated,
+                'errors'  => $errors,
+                'seen'    => $seen,
+                'pages'   => $pages,
+            ]);
 
             // Évite de relire la même page si Meta renvoie le même lien
             $next = $response->json('paging.next');
@@ -132,8 +225,29 @@ class SyncFacebookConversations extends Command
             Cache::forever(self::CACHE_KEY, $startedAt);
         }
 
-        $this->info("Synchro Facebook OK : {$created} créés, {$updated} mis à jour.");
+        $this->report([
+            'state'       => 'done',
+            'created'     => $created,
+            'updated'     => $updated,
+            'errors'      => $errors,
+            'seen'        => $seen,
+            'pages'       => $pages,
+            'complete'    => $complete,
+            'finished_at' => now()->toIso8601String(),
+        ]);
+
+        $this->info("Synchro Facebook OK : {$created} créés, {$updated} mis à jour, {$errors} erreur(s).");
 
         return self::SUCCESS;
+    }
+
+    /** Met à jour l'état partagé (lu par FacebookSyncController@status). */
+    private function report(array $patch): void
+    {
+        $this->status = array_merge($this->status, $patch, [
+            'updated_at' => now()->toIso8601String(),
+        ]);
+
+        Cache::put(self::STATUS_KEY, $this->status, now()->addDay());
     }
 }

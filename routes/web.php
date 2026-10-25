@@ -6,6 +6,7 @@ use App\Http\Controllers\CampaignController;
 use App\Http\Controllers\CommandeController;
 use App\Http\Controllers\ContactController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\FacebookSyncController;
 use App\Http\Controllers\LeadController;
 use App\Http\Controllers\UnsubscribeController;
 use Illuminate\Support\Facades\Route;
@@ -42,8 +43,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/password', [AccountController::class, 'edit'])->name('password.edit');
     Route::put('/password', [AccountController::class, 'update'])->name('password.update');
 
+    // Synchro Facebook manuelle (lancement + suivi)
+    Route::post('/facebook/sync', [FacebookSyncController::class, 'start'])->middleware('throttle:6,1')->name('facebook.sync');
+    Route::get('/facebook/sync/status', [FacebookSyncController::class, 'status'])->name('facebook.sync.status');
+
     Route::get('/contacts/import', [ContactController::class, 'importForm'])->name('contacts.import.form');
     Route::post('/contacts/import', [ContactController::class, 'import'])->name('contacts.import');
+    Route::post('/contacts/bulk-destroy', [ContactController::class, 'bulkDestroy'])->name('contacts.bulk-destroy');
     Route::resource('contacts', ContactController::class)->except('show');
 
     // Suivi des commandes (les routes fixes doivent rester avant la resource)

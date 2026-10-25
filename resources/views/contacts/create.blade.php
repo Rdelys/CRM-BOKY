@@ -2,8 +2,10 @@
 @section('title', 'Nouveau contact')
 
 @section('content')
+@php($backUrl = session('contacts.index_url', route('contacts.index')))
+
 <div class="mb-6">
-    <a href="{{ route('contacts.index') }}" class="text-sm font-medium text-blue-600 hover:text-blue-800">← Retour aux contacts</a>
+    <a href="{{ $backUrl }}" class="text-sm font-medium text-blue-600 hover:text-blue-800">← Retour aux contacts</a>
     <h1 class="mt-1 text-2xl font-bold text-slate-900">Nouveau contact</h1>
 </div>
 
@@ -12,7 +14,7 @@
     @include('contacts._form')
     <div class="mt-6 flex gap-2 border-t border-slate-100 pt-5">
         <button class="btn-primary">Enregistrer</button>
-        <a href="{{ route('contacts.index') }}" class="btn-outline">Annuler</a>
+        <a href="{{ $backUrl }}" class="btn-outline">Annuler</a>
     </div>
 </form>
 @endsection

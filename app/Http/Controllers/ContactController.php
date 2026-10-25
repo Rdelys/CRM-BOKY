@@ -10,6 +10,9 @@ use Illuminate\Validation\Rule;
 
 class ContactController extends Controller
 {
+    /** Clé de session : dernière URL de la liste (page + filtres). */
+    private const INDEX_URL_KEY = 'contacts.index_url';
+
     /** En-têtes alternatifs (Excel, Facebook Lead Ads…) => colonne du CRM. */
     private const HEADER_ALIASES = [
         'full_name'     => 'name',
@@ -30,6 +33,19 @@ class ContactController extends Controller
 
     public function index(Request $request)
     {
+        // Réinitialisation explicite (lien « Réinitialiser »)
+        if ($request->boolean('reset')) {
+            session()->forget(self::INDEX_URL_KEY);
+
+            return redirect()->route('contacts.index');
+        }
+
+        // Arrivée sans paramètre (clic sur le menu) : on restaure la dernière page + filtres vus
+        $saved = session(self::INDEX_URL_KEY);
+        if (empty($request->query()) && $saved && $saved !== $request->fullUrl()) {
+            return redirect($saved);
+        }
+
         $contacts = Contact::query()
             ->when($request->q, function ($q, $term) {
                 $q->where(function ($w) use ($term) {
@@ -40,9 +56,18 @@ class ContactController extends Controller
             })
             ->when($request->status, fn ($q, $v) => $q->where('status', $v))
             ->when($request->source, fn ($q, $v) => $q->where('source', $v))
-            ->latest()
+            ->orderByDesc('created_at')   // du plus récent au plus ancien
+            ->orderByDesc('id')           // départage les contacts créés à la même seconde (imports)
             ->paginate(20)
             ->withQueryString();
+
+        // Page demandée au-delà de la dernière (ex. après suppression) : retour à la dernière page
+        if ($contacts->lastPage() > 0 && $contacts->currentPage() > $contacts->lastPage()) {
+            return redirect($request->fullUrlWithQuery(['page' => $contacts->lastPage()]));
+        }
+
+        // On mémorise page + filtres pour y revenir (menu, modification, suppression)
+        session([self::INDEX_URL_KEY => $request->fullUrl()]);
 
         return view('contacts.index', compact('contacts'));
     }
@@ -56,6 +81,9 @@ class ContactController extends Controller
     {
         Contact::create($this->validated($request));
 
+        // Le nouveau contact est le plus récent : on repart en page 1
+        session()->forget(self::INDEX_URL_KEY);
+
         return redirect()->route('contacts.index')->with('success', 'Contact ajouté.');
     }
 
@@ -68,14 +96,30 @@ class ContactController extends Controller
     {
         $contact->update($this->validated($request));
 
-        return redirect()->route('contacts.index')->with('success', 'Contact mis à jour.');
+        return $this->backToIndex()->with('success', 'Contact mis à jour.');
     }
 
     public function destroy(Contact $contact)
     {
         $contact->delete();
 
-        return redirect()->route('contacts.index')->with('success', 'Contact supprimé.');
+        return $this->backToIndex()->with('success', 'Contact supprimé.');
+    }
+
+    /** Suppression multiple. */
+    public function bulkDestroy(Request $request)
+    {
+        $data = $request->validate([
+            'ids'   => ['required', 'array', 'min:1', 'max:500'],
+            'ids.*' => ['integer'],
+        ], [
+            'ids.required' => 'Sélectionnez au moins un contact.',
+            'ids.min'      => 'Sélectionnez au moins un contact.',
+        ]);
+
+        $deleted = Contact::whereIn('id', $data['ids'])->delete();
+
+        return $this->backToIndex()->with('success', "{$deleted} contact(s) supprimé(s).");
     }
 
     public function importForm()
@@ -218,7 +262,16 @@ class ContactController extends Controller
                 . (count($skippedLines) > 10 ? '…' : '') . ')';
         }
 
+        // Les contacts importés sont les plus récents : on repart en page 1
+        session()->forget(self::INDEX_URL_KEY);
+
         return redirect()->route('contacts.index')->with('success', $message . '.');
+    }
+
+    /** Retourne à la liste là où l'utilisateur était (page + filtres), sinon à la liste simple. */
+    private function backToIndex()
+    {
+        return redirect(session(self::INDEX_URL_KEY, route('contacts.index')));
     }
 
     /** Convertit le contenu du fichier en UTF-8 (UTF-16 Facebook, ANSI Excel) et retire le BOM. */

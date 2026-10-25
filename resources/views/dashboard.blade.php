@@ -43,6 +43,8 @@
         <p class="mt-1 text-sm text-slate-500">Voici l'activité de votre CRM.</p>
     </div>
     <div class="flex flex-wrap gap-2">
+            @include('partials.facebook-sync')
+
         <a href="{{ route('contacts.create') }}" class="btn-outline">Nouveau contact</a>
         <a href="{{ route('commandes.create') }}" class="btn-outline">Nouvelle commande</a>
         <a href="{{ route('campaigns.create') }}" class="btn-primary">Nouvelle campagne</a>
