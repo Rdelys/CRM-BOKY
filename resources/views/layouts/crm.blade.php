@@ -18,6 +18,7 @@
         ['route' => 'campaigns.index',    'match' => 'campaigns.*', 'label' => 'Campagnes',       'icon' => '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>'],
         ['route' => 'marketing.index', 'match' => 'marketing.*', 'label' => 'Marketing', 'icon' => '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-7"/>'],
         ['route' => 'password.edit',      'match' => 'password.*',  'label' => 'Mot de passe',    'icon' => '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>'],
+        ['route' => 'objectifs.index', 'match' => 'objectifs.*', 'label' => 'Objectifs', 'icon' => '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'],
     ];
     $user = auth()->user();
 @endphp

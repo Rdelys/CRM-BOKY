@@ -12,6 +12,7 @@ use App\Http\Controllers\UnsubscribeController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\FacebookWebhookController;
 use App\Http\Controllers\MarketingController;
+use App\Http\Controllers\ObjectifController;
 
 // Réception des prospects depuis le siteweb (protégé par jeton, sans CSRF)
 Route::post('/leads', [LeadController::class, 'store'])
@@ -69,6 +70,11 @@ Route::middleware('auth')->group(function () {
     Route::post('/marketing/insights/sync', [MarketingController::class, 'syncInsights'])
         ->middleware('throttle:6,1')->name('marketing.insights.sync');
         
+        // Objectifs
+    Route::get('/objectifs', [ObjectifController::class, 'index'])->name('objectifs.index');
+    Route::post('/objectifs', [ObjectifController::class, 'save'])->name('objectifs.save');
+    Route::post('/objectifs/reprendre', [ObjectifController::class, 'copy'])->name('objectifs.copy');
+
     Route::resource('campaigns', CampaignController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
     Route::post('/campaigns/{campaign}/send', [CampaignController::class, 'send'])->name('campaigns.send');
     Route::post('/campaigns/{campaign}/relaunch', [CampaignController::class, 'relaunch'])->name('campaigns.relaunch');
