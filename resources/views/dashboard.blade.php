@@ -217,6 +217,33 @@
     </div>
 </div>
 
+
+{{-- Résumé marketing en direct --}}
+<div class="mb-8">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h2 class="text-lg font-bold text-slate-900">
+                Résumé marketing
+                <span class="ml-2 inline-flex items-center gap-1 text-xs font-medium text-emerald-600">
+                    <span class="h-2 w-2 animate-pulse rounded-full bg-emerald-500"></span> en direct
+                </span>
+            </h2>
+            <p id="mk-sub" class="text-xs text-slate-500">Chargement…</p>
+        </div>
+        <div class="flex items-center gap-3">
+            <div class="seg" id="mk-seg">
+                <button type="button" class="seg-btn" data-period="day">Jour</button>
+                <button type="button" class="seg-btn" data-period="week">Semaine</button>
+                <button type="button" class="seg-btn" data-period="month">Mois</button>
+                <button type="button" class="seg-btn" data-period="year">Année</button>
+            </div>
+            <a href="{{ route('marketing.index') }}" class="text-sm font-medium text-blue-600 hover:text-blue-800">Détails</a>
+        </div>
+    </div>
+    <div id="mk-cards" class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"></div>
+</div>
+
+
 {{-- Filtre de période --}}
 <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
     <h2 class="text-lg font-bold text-slate-900">Statistiques</h2>
@@ -225,6 +252,7 @@
         <span id="error" class="hidden text-xs text-red-600">Impossible de charger les statistiques.</span>
         <div class="seg" id="period-seg">
             <button type="button" class="seg-btn" data-period="day">Jour</button>
+            <button type="button" class="seg-btn" data-period="week">Semaine</button>
             <button type="button" class="seg-btn" data-period="month">Mois</button>
             <button type="button" class="seg-btn" data-period="year">Année</button>
         </div>
@@ -474,14 +502,113 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
 (function () {
+    const URL = @json(route('marketing.summary'));
+    const nf = new Intl.NumberFormat('fr-FR');
+    const $ = id => document.getElementById(id);
+    let period = 'day';
+    let timer = null;
+
+    function fmt(k, v) {
+        if (v === null || v === undefined) return '—';
+        if (k.type === 'money') return nf.format(v) + ' Ar';
+        if (k.type === 'rate') {
+            const d = k.decimals ?? 1;
+            return v.toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }) + ' %';
+        }
+        return nf.format(v);
+    }
+
+    function badge(k) {
+        const wrap = document.createElement('div');
+        wrap.className = 'mt-3';
+        if (k.diff === null) {
+            const s = document.createElement('span');
+            s.className = 'text-xs text-slate-400';
+            s.textContent = 'Pas de comparaison';
+            wrap.appendChild(s);
+            return wrap;
+        }
+        const cls = k.good === null ? 'bg-slate-100 text-slate-600'
+            : (k.good ? 'bg-emerald-50 text-emerald-700' : 'bg-red-50 text-red-700');
+        const arrow = k.diff > 0 ? '▲' : (k.diff < 0 ? '▼' : '■');
+        let txt;
+        if (k.type === 'rate') txt = Math.abs(k.diff).toLocaleString('fr-FR', { maximumFractionDigits: k.decimals ?? 1 }) + ' pt';
+        else if (k.pct !== null) txt = nf.format(Math.round(Math.abs(k.pct))) + ' %';
+        else txt = nf.format(Math.abs(k.diff));
+
+        const b = document.createElement('span');
+        b.className = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ' + cls;
+        b.textContent = arrow + ' ' + txt;
+        const t = document.createElement('span');
+        t.className = 'ml-1 text-xs text-slate-400';
+        t.textContent = 'contre ' + fmt(k, k.previous) + ' avant';
+        wrap.appendChild(b);
+        wrap.appendChild(t);
+        return wrap;
+    }
+
+    function card(k) {
+        const c = document.createElement('div');
+        c.className = 'card p-5';
+        const l = document.createElement('span');
+        l.className = 'text-xs font-semibold uppercase tracking-wider text-slate-500';
+        l.textContent = k.label;
+        const v = document.createElement('div');
+        v.className = 'mt-2 text-3xl font-bold text-slate-900';
+        v.textContent = fmt(k, k.value);
+        c.appendChild(l);
+        c.appendChild(v);
+        c.appendChild(badge(k));
+        return c;
+    }
+
+    async function load() {
+        try {
+            const res = await fetch(URL + '?period=' + period, {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const json = await res.json();
+            const box = $('mk-cards');
+            box.innerHTML = '';
+            json.kpis.forEach(k => box.appendChild(card(k)));
+            $('mk-sub').textContent = json.label + ' · mis à jour à ' + json.generated_at + ' · écart vs même durée de la période précédente';
+        } catch (e) {
+            $('mk-sub').textContent = 'Mise à jour impossible pour le moment.';
+        }
+    }
+
+    function sync() {
+        document.querySelectorAll('#mk-seg [data-period]').forEach(b =>
+            b.classList.toggle('is-active', b.dataset.period === period));
+    }
+
+    document.querySelectorAll('#mk-seg [data-period]').forEach(b => b.addEventListener('click', () => {
+        period = b.dataset.period;
+        sync();
+        load();
+    }));
+
+    // Actualisation automatique toutes les 30 s (en pause si l'onglet est caché)
+    timer = setInterval(() => { if (!document.hidden) load(); }, 30000);
+    document.addEventListener('visibilitychange', () => { if (!document.hidden) load(); });
+
+    sync();
+    load();
+})();
+</script>
+
+<script>
+(function () {
     const SOURCES = @json($sources);
     const STATUTS = @json($statuts);
     const STATS_URL = @json(route('dashboard.stats'));
     const CONTACT_URL = @json(url('/contacts'));
     const LOYALTY_URL = @json(route('dashboard.loyalty'));
-    const RANGES = { day: [7, 30, 90], month: [6, 12, 24], year: [3, 5, 10] };
-    const DEFAULT_RANGE = { day: 30, month: 12, year: 5 };
-    const UNIT = { day: 'jours', month: 'mois', year: 'ans' };
+    const RANGES = { day: [7, 30, 90], week: [4, 12, 26], month: [6, 12, 24], year: [3, 5, 10] };
+const DEFAULT_RANGE = { day: 30, week: 12, month: 12, year: 5 };
+const UNIT = { day: 'jours', week: 'semaines', month: 'mois', year: 'ans' };
     const CHANNELS = ['email', 'sms', 'messenger'];
     const TTL = 120000;
     const nf = new Intl.NumberFormat('fr-FR');
@@ -1010,8 +1137,7 @@
 
             if (!prefetched) {                  // précharge les autres périodes pour des changements instantanés
                 prefetched = true;
-                ['month', 'year'].forEach(p => fetchStats(p, DEFAULT_RANGE[p]).catch(() => {}));
-            }
+                ['week', 'month', 'year'].forEach(p => fetchStats(p, DEFAULT_RANGE[p]).catch(() => {}));            }
         } catch (e) {
             if (id === reqId) $('error').classList.remove('hidden');
         } finally {

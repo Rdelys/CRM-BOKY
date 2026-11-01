@@ -16,3 +16,5 @@ Schedule::command('campaigns:dispatch-due')->everyMinute()->withoutOverlapping()
 
 // Récupère les nouvelles personnes qui ont écrit à la Page Facebook
 Schedule::command('crm:sync-facebook')->everyFifteenMinutes()->withoutOverlapping();
+
+Schedule::command('crm:sync-fb-insights --days=3')->hourly()->withoutOverlapping();

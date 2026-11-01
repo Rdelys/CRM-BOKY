@@ -19,10 +19,18 @@ return [
     ],
 
     'facebook' => [
-    'verify_token' => env('FB_VERIFY_TOKEN'),
-    'app_secret'   => env('FB_APP_SECRET'),
-    'page_token'   => env('FB_PAGE_TOKEN'),
-    'page_id'      => env('FB_PAGE_ID'),
-    'graph'        => 'https://graph.facebook.com/v21.0',
-],
+        'verify_token' => env('FB_VERIFY_TOKEN'),
+        'app_secret'   => env('FB_APP_SECRET'),
+        'page_token'   => env('FB_PAGE_TOKEN'),
+        'page_id'      => env('FB_PAGE_ID'),
+        'graph'        => 'https://graph.facebook.com/v21.0',
+
+        // Métriques de visibilité (Page Insights)
+        'insight_metrics' => [
+            'views'       => env('FB_METRIC_VIEWS', 'page_media_view'),
+            'reach'       => env('FB_METRIC_REACH', 'page_total_media_view_unique'),
+            'engagements' => env('FB_METRIC_ENGAGEMENTS', 'page_post_engagements'),
+            'follows'     => env('FB_METRIC_FOLLOWS', 'page_daily_follows'),
+        ],
+    ],
 ];

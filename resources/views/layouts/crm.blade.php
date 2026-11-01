@@ -16,6 +16,7 @@
         ['route' => 'commandes.index',    'match' => ['commandes.index', 'commandes.create', 'commandes.edit', 'commandes.import.form'], 'label' => 'Commandes', 'icon' => '<path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 01-8 0"/>'],
         ['route' => 'commandes.classement', 'match' => 'commandes.classement', 'label' => 'Meilleurs clients', 'icon' => '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4z"/><path d="M17 5h3v2a3 3 0 01-3 3M7 5H4v2a3 3 0 003 3"/>'],
         ['route' => 'campaigns.index',    'match' => 'campaigns.*', 'label' => 'Campagnes',       'icon' => '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>'],
+        ['route' => 'marketing.index', 'match' => 'marketing.*', 'label' => 'Marketing', 'icon' => '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-7"/>'],
         ['route' => 'password.edit',      'match' => 'password.*',  'label' => 'Mot de passe',    'icon' => '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>'],
     ];
     $user = auth()->user();

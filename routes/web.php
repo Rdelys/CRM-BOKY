@@ -11,6 +11,7 @@ use App\Http\Controllers\LeadController;
 use App\Http\Controllers\UnsubscribeController;
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\FacebookWebhookController;
+use App\Http\Controllers\MarketingController;
 
 // Réception des prospects depuis le siteweb (protégé par jeton, sans CSRF)
 Route::post('/leads', [LeadController::class, 'store'])
@@ -60,6 +61,14 @@ Route::middleware('auth')->group(function () {
     Route::post('/commandes/{commande}/statut', [CommandeController::class, 'statut'])->name('commandes.statut');
     Route::resource('commandes', CommandeController::class)->except('show');
 
+        // Marketing
+    Route::get('/marketing', [MarketingController::class, 'index'])->name('marketing.index');
+    Route::get('/marketing/resume', [MarketingController::class, 'summary'])->name('marketing.summary');
+    Route::post('/marketing/depenses', [MarketingController::class, 'storeSpend'])->name('marketing.spends.store');
+    Route::delete('/marketing/depenses/{spend}', [MarketingController::class, 'destroySpend'])->name('marketing.spends.destroy');
+    Route::post('/marketing/insights/sync', [MarketingController::class, 'syncInsights'])
+        ->middleware('throttle:6,1')->name('marketing.insights.sync');
+        
     Route::resource('campaigns', CampaignController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
     Route::post('/campaigns/{campaign}/send', [CampaignController::class, 'send'])->name('campaigns.send');
     Route::post('/campaigns/{campaign}/relaunch', [CampaignController::class, 'relaunch'])->name('campaigns.relaunch');

@@ -18,6 +18,7 @@ class DashboardController extends Controller
 {
     private const RANGES = [
         'day'   => ['min' => 7, 'max' => 90, 'default' => 30],
+        'week'  => ['min' => 4, 'max' => 52, 'default' => 12],
         'month' => ['min' => 6, 'max' => 24, 'default' => 12],
         'year'  => ['min' => 2, 'max' => 10, 'default' => 5],
     ];
@@ -105,7 +106,7 @@ class DashboardController extends Controller
     /** Données des graphiques (JSON), filtrées par période. */
     public function stats(Request $request): JsonResponse
     {
-        $period = in_array($request->query('period'), ['day', 'month', 'year'], true)
+        $period = in_array($request->query('period'), ['day', 'week', 'month', 'year'], true)
             ? $request->query('period')
             : 'day';
 
@@ -404,6 +405,14 @@ class DashboardController extends Controller
                 $labels[] = $d->format('d/m');
                 $titles[] = $d->locale('fr')->translatedFormat('l d F Y');
             }
+        } elseif ($period === 'week') {
+            $start = now()->startOfWeek()->subWeeks($range - 1);
+            for ($i = 0; $i < $range; $i++) {
+                $d = $start->copy()->addWeeks($i);
+                $keys[]   = $d->format('Y-m-d');                 // lundi de la semaine
+                $labels[] = $d->format('d/m');
+                $titles[] = 'Semaine du ' . $d->locale('fr')->translatedFormat('d F Y');
+            }
         } elseif ($period === 'month') {
             $start = now()->startOfMonth()->subMonths($range - 1);
             for ($i = 0; $i < $range; $i++) {
@@ -427,19 +436,30 @@ class DashboardController extends Controller
 
     /** Expression SQL qui regroupe une date par jour, mois ou année (MySQL, PostgreSQL, SQLite). */
     private function bucketExpr(string $column, string $period): string
-    {
-        $format = match ($period) {
-            'year'  => '%Y',
-            'month' => '%Y-%m',
-            default => '%Y-%m-%d',
-        };
+{
+    $driver = DB::connection()->getDriverName();
 
-        return match (DB::connection()->getDriverName()) {
-            'sqlite' => "strftime('{$format}', {$column})",
-            'pgsql'  => "to_char({$column}, '" . str_replace(['%Y', '%m', '%d'], ['YYYY', 'MM', 'DD'], $format) . "')",
-            default  => "DATE_FORMAT({$column}, '{$format}')",
+    // Semaine : on regroupe par date du lundi
+    if ($period === 'week') {
+        return match ($driver) {
+            'sqlite' => "date({$column}, 'weekday 0', '-6 days')",
+            'pgsql'  => "to_char(date_trunc('week', {$column}), 'YYYY-MM-DD')",
+            default  => "DATE_FORMAT(DATE_SUB(DATE({$column}), INTERVAL WEEKDAY({$column}) DAY), '%Y-%m-%d')",
         };
     }
+
+    $format = match ($period) {
+        'year'  => '%Y',
+        'month' => '%Y-%m',
+        default => '%Y-%m-%d',
+    };
+
+    return match ($driver) {
+        'sqlite' => "strftime('{$format}', {$column})",
+        'pgsql'  => "to_char({$column}, '" . str_replace(['%Y', '%m', '%d'], ['YYYY', 'MM', 'DD'], $format) . "')",
+        default  => "DATE_FORMAT({$column}, '{$format}')",
+    };
+}
 
     /** Date d'un envoi : sent_at, sinon la dernière mise à jour (cas d'un échec). */
     private function logDateExpr(): string
