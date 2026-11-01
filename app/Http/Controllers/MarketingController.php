@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MarketingSpend;
 use App\Services\MarketingStatsService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Artisan;
@@ -44,22 +45,60 @@ class MarketingController extends Controller
         ));
     }
 
-    /** Résumé en direct pour le tableau de bord (jour, semaine, mois, an). */
+    /** Résumé en direct pour le tableau de bord (jour, semaine, mois, an, ou plage personnalisée). */
     public function summary(Request $request): JsonResponse
     {
-        $period = in_array($request->query('period'), ['day', 'week', 'month', 'year'], true)
+        $period = in_array($request->query('period'), ['day', 'week', 'month', 'year', 'custom'], true)
             ? $request->query('period')
             : 'day';
 
-        $r = $this->stats->range($period);
+        if ($period === 'custom') {
+            $isDate = fn ($v) => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v);
+
+            try {
+                $from = $isDate($request->query('from')) ? Carbon::parse($request->query('from'))->startOfDay() : today()->subDays(29);
+                $to   = $isDate($request->query('to')) ? Carbon::parse($request->query('to'))->startOfDay() : today();
+            } catch (\Throwable) {
+                $from = today()->subDays(29);
+                $to   = today();
+            }
+
+            if ($from->gt($to)) {
+                [$from, $to] = [$to, $from];
+            }
+
+            $end = $to->copy()->addDay();
+            if ($end->gt(now())) {
+                $end = now();                                   // on ne dépasse pas maintenant
+            }
+            if ($end->lt($from)) {
+                $end = $from->copy();
+            }
+
+            // Période précédente de même durée, juste avant
+            $len      = $end->getTimestamp() - $from->getTimestamp();
+            $prevFrom = $from->copy()->subSeconds($len);
+            $prevEnd  = $from->copy();
+
+            $label = 'Du ' . $from->copy()->locale('fr')->translatedFormat('d F Y')
+                . ' au ' . $to->copy()->locale('fr')->translatedFormat('d F Y');
+        } else {
+            $r        = $this->stats->range($period);
+            $from     = $r['from'];
+            $end      = $r['end'];
+            $prevFrom = $r['prev_from'];
+            $prevEnd  = $r['prev_end'];
+            $label    = $r['label'];
+        }
+
         $kpis = $this->stats->compare(
-            $this->stats->kpis($r['from'], $r['end']),
-            $this->stats->kpis($r['prev_from'], $r['prev_end'])
+            $this->stats->kpis($from, $end),
+            $this->stats->kpis($prevFrom, $prevEnd)
         );
 
         return response()->json([
             'period'       => $period,
-            'label'        => $r['label'],
+            'label'        => $label,
             'generated_at' => now()->format('H:i:s'),
             'kpis'         => array_values($kpis),
         ]);

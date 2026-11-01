@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Objectif;
 use App\Services\MarketingStatsService;
 use App\Services\ObjectifService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 
 class ObjectifController extends Controller
@@ -15,11 +16,15 @@ class ObjectifController extends Controller
     ) {
     }
 
-    /** Page « Objectifs » : mensuel ou annuel. */
-    public function index(Request $request)
+    private function normalize(mixed $period): string
     {
-        $period = $request->query('period') === 'year' ? 'year' : 'month';
-        $r = $this->stats->range($period, $request->query('ref'));
+        return in_array($period, ['day', 'month', 'year'], true) ? $period : 'month';
+    }
+
+    /** Calcule la valeur, l'objectif et le statut de chaque indicateur pour une période. */
+    private function build(string $period, ?string $ref): array
+    {
+        $r = $this->stats->range($period, $ref);
 
         $values  = $this->service->values($r['from'], $r['end']);
         $targets = Objectif::where('period', $period)->where('ref', $r['ref'])->pluck('target', 'metric');
@@ -54,19 +59,49 @@ class ObjectifController extends Controller
         $defined = collect($rows)->whereNotNull('target');
         $hasPrevious = Objectif::where('period', $period)->where('ref', $r['prev_ref'])->exists();
 
-        return view('objectifs.index', compact('period', 'r', 'rows', 'defined', 'count', 'elapsed', 'hasPrevious'));
+        return compact('period', 'r', 'rows', 'defined', 'count', 'elapsed', 'hasPrevious');
+    }
+
+    /** Page « Objectifs » : journalier, mensuel ou annuel. */
+    public function index(Request $request)
+    {
+        $period = $this->normalize($request->query('period'));
+
+        return view('objectifs.index', $this->build($period, $request->query('ref')));
+    }
+
+    /** Résumé JSON pour le tableau de bord. */
+    public function summary(Request $request): JsonResponse
+    {
+        $period = $this->normalize($request->query('period'));
+        $d = $this->build($period, $request->query('ref'));
+        $r = $d['r'];
+
+        return response()->json([
+            'period'     => $period,
+            'ref'        => $r['ref'],
+            'prev_ref'   => $r['prev_ref'],
+            'next_ref'   => $r['next_ref'],
+            'label'      => $r['label'],
+            'is_current' => $r['is_current'],
+            'elapsed'    => round($d['elapsed'], 4),
+            'counts'     => $d['count'],
+            'items'      => $d['defined']->values()->all(),
+        ]);
     }
 
     /** Enregistre tous les objectifs de la période d'un coup (champ vide = pas d'objectif). */
     public function save(Request $request)
     {
-        $period = $request->input('period') === 'year' ? 'year' : 'month';
+        $period = $this->normalize($request->input('period'));
         $ref    = (string) $request->input('ref');
 
-        abort_unless(
-            $period === 'year' ? preg_match('/^\d{4}$/', $ref) : preg_match('/^\d{4}-\d{2}$/', $ref),
-            422
-        );
+        $valid = match ($period) {
+            'year'  => preg_match('/^\d{4}$/', $ref),
+            'day'   => preg_match('/^\d{4}-\d{2}-\d{2}$/', $ref),
+            default => preg_match('/^\d{4}-\d{2}$/', $ref),
+        };
+        abort_unless($valid, 422);
 
         $input = (array) $request->input('targets', []);
         $errors = [];
@@ -104,7 +139,7 @@ class ObjectifController extends Controller
     /** Reprend les objectifs de la période précédente (sans écraser ceux déjà saisis). */
     public function copy(Request $request)
     {
-        $period = $request->input('period') === 'year' ? 'year' : 'month';
+        $period = $this->normalize($request->input('period'));
         $r = $this->stats->range($period, (string) $request->input('ref'));
 
         $copied = 0;

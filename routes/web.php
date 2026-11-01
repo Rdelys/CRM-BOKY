@@ -74,6 +74,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/objectifs', [ObjectifController::class, 'index'])->name('objectifs.index');
     Route::post('/objectifs', [ObjectifController::class, 'save'])->name('objectifs.save');
     Route::post('/objectifs/reprendre', [ObjectifController::class, 'copy'])->name('objectifs.copy');
+Route::get('/objectifs/resume', [ObjectifController::class, 'summary'])->name('objectifs.summary');
 
     Route::resource('campaigns', CampaignController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
     Route::post('/campaigns/{campaign}/send', [CampaignController::class, 'send'])->name('campaigns.send');

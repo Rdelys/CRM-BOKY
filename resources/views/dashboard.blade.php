@@ -33,7 +33,69 @@
             . $arrow . ' ' . number_format(abs($v), 0, ',', ' ') . ' %</span> '
             . '<span class="text-xs text-slate-400">' . $suffix . '</span>';
     };
+
+    // Sections que l'on peut masquer (clé => libellé)
+    $sectionGroups = [
+        'Indicateurs' => [
+            'contacts_clients' => 'Contacts et clients',
+            'kpi_contacts'     => 'Nouveaux contacts et emails',
+            'kpi_commandes'    => "Commandes et chiffre d'affaires",
+            'kpi_fidelite'     => 'Conversion et fidélité (indicateurs)',
+        ],
+        'Suivi' => [
+            'objectifs' => 'Objectifs (jour, mois, année)',
+            'marketing' => 'Résumé marketing en direct',
+        ],
+        'Graphiques' => [
+            'nouveaux_contacts' => 'Nouveaux contacts',
+            'origine'           => 'Origine des contacts',
+            'messages'          => 'Messages envoyés',
+            'statut_commandes'  => 'Statut des commandes',
+            'commandes'         => 'Commandes et CA',
+            'conversion'        => 'Taux de conversion',
+            'conversion_source' => 'Conversion par source',
+            'fidelite'          => 'Taux de fidélité',
+            'niveaux'           => 'Niveaux de clients',
+        ],
+        'Classements' => [
+            'top_clients' => 'Meilleurs clients',
+            'top_livres'  => 'Livres les plus commandés',
+        ],
+        'Activité récente' => [
+            'derniers_contacts'  => 'Derniers contacts',
+            'dernieres_campagnes' => 'Dernières campagnes',
+            'dernieres_commandes' => 'Dernières commandes',
+        ],
+    ];
 @endphp
+
+{{-- Applique les sections masquées avant l'affichage (évite le clignotement) --}}
+<script>
+(function () {
+    const KEY = 'crm.dashboard.hidden.{{ auth()->id() }}';
+    const style = document.createElement('style');
+    document.head.appendChild(style);
+
+    function read() {
+        try {
+            const v = JSON.parse(localStorage.getItem(KEY) || '[]');
+            return Array.isArray(v) ? v : [];
+        } catch (e) { return []; }
+    }
+    function apply(list) {
+        style.textContent = list.map(k => '[data-section="' + k + '"]{display:none!important}').join('\n');
+    }
+
+    window.dashSections = {
+        get: read,
+        set: function (list) {
+            try { localStorage.setItem(KEY, JSON.stringify(list)); } catch (e) {}
+            apply(list);
+        },
+    };
+    apply(read());
+})();
+</script>
 
 {{-- En-tête --}}
 <div class="mb-8 flex flex-wrap items-end justify-between gap-4">
@@ -42,8 +104,39 @@
         <h1 class="mt-1 text-3xl font-bold tracking-tight text-slate-900">Bonjour{{ $firstName !== '' ? ', ' . $firstName : '' }}</h1>
         <p class="mt-1 text-sm text-slate-500">Voici l'activité de votre CRM.</p>
     </div>
-    <div class="flex flex-wrap gap-2">
-            @include('partials.facebook-sync')
+    <div class="flex flex-wrap items-center gap-2">
+        @include('partials.facebook-sync')
+
+        {{-- Choix des sections affichées --}}
+        <div class="relative" id="sections-wrap">
+            <button type="button" id="sections-btn" class="btn-outline">
+                Affichage
+                <span id="sections-count" class="ml-1 hidden rounded-full bg-amber-100 px-1.5 text-xs font-semibold text-amber-700"></span>
+            </button>
+            <div id="sections-panel" class="card absolute right-0 z-30 mt-2 hidden w-80 p-4 shadow-xl" style="max-height:75vh;overflow-y:auto">
+                <div class="mb-3 flex items-center justify-between gap-2">
+                    <h3 class="text-sm font-bold text-slate-900">Sections affichées</h3>
+                    <div class="flex gap-3 text-xs font-medium">
+                        <button type="button" id="sections-all" class="text-blue-600 hover:text-blue-800">Tout afficher</button>
+                        <button type="button" id="sections-none" class="text-slate-500 hover:text-slate-800">Tout masquer</button>
+                    </div>
+                </div>
+                @foreach($sectionGroups as $group => $items)
+                    <div class="mb-3">
+                        <div class="mb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">{{ $group }}</div>
+                        <div class="space-y-1">
+                            @foreach($items as $key => $label)
+                                <label class="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-sm text-slate-700 hover:bg-slate-50">
+                                    <input type="checkbox" data-key="{{ $key }}" class="h-4 w-4 rounded border-slate-300 text-blue-600">
+                                    {{ $label }}
+                                </label>
+                            @endforeach
+                        </div>
+                    </div>
+                @endforeach
+                <p class="text-xs text-slate-400">Votre choix est mémorisé sur cet appareil.</p>
+            </div>
+        </div>
 
         <a href="{{ route('contacts.create') }}" class="btn-outline">Nouveau contact</a>
         <a href="{{ route('commandes.create') }}" class="btn-outline">Nouvelle commande</a>
@@ -52,7 +145,7 @@
 </div>
 
 {{-- Grandes cartes : Contacts et Clients --}}
-<div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
+<div data-section="contacts_clients" class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2">
     {{-- Contacts --}}
     <div class="relative overflow-hidden rounded-2xl bg-gradient-to-br from-blue-600 to-indigo-700 p-6 text-white shadow-lg shadow-blue-600/20">
         <div class="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-white/10"></div>
@@ -89,7 +182,7 @@
 </div>
 
 {{-- Petites cartes contacts --}}
-<div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
+<div data-section="kpi_contacts" class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
     <div class="card p-5">
         <div class="flex items-center justify-between">
             <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Nouveaux aujourd'hui</span>
@@ -125,7 +218,7 @@
 </div>
 
 {{-- KPI commandes --}}
-<div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+<div data-section="kpi_commandes" class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
     <div class="card p-5">
         <div class="flex items-center justify-between">
             <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Commandes ce mois</span>
@@ -180,7 +273,7 @@
     $fidPrev = $stats['fidelite_prev'];
     $fidDelta = ($fid !== null && $fidPrev !== null) ? round($fid - $fidPrev, 1) : null;
 @endphp
-<div class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+<div data-section="kpi_fidelite" class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
     <div class="card p-5">
         <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Taux de conversion</span>
         <div class="mt-2 text-3xl font-bold text-slate-900">
@@ -217,9 +310,33 @@
     </div>
 </div>
 
+{{-- Objectifs (jour / mois / année) --}}
+<div data-section="objectifs" class="mb-8">
+    <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h2 class="text-lg font-bold text-slate-900">Objectifs</h2>
+            <p id="ob-sub" class="text-xs text-slate-500">Chargement…</p>
+        </div>
+        <div class="flex flex-wrap items-center gap-3">
+            <div class="seg" id="ob-seg">
+                <button type="button" class="seg-btn" data-period="day">Jour</button>
+                <button type="button" class="seg-btn" data-period="month">Mois</button>
+                <button type="button" class="seg-btn" data-period="year">Année</button>
+            </div>
+            <div class="flex items-center gap-1">
+                <button type="button" id="ob-prev" class="btn-outline" aria-label="Période précédente">←</button>
+                <span id="ob-label" class="min-w-[8rem] text-center text-sm font-semibold text-slate-700">—</span>
+                <button type="button" id="ob-next" class="btn-outline" aria-label="Période suivante">→</button>
+            </div>
+            <a id="ob-link" href="{{ route('objectifs.index') }}" class="text-sm font-medium text-blue-600 hover:text-blue-800">Gérer</a>
+        </div>
+    </div>
+    <div id="ob-summary" class="mb-3 flex flex-wrap gap-2 text-xs"></div>
+    <div id="ob-cards" class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"></div>
+</div>
 
 {{-- Résumé marketing en direct --}}
-<div class="mb-8">
+<div data-section="marketing" class="mb-8">
     <div class="mb-3 flex flex-wrap items-center justify-between gap-3">
         <div>
             <h2 class="text-lg font-bold text-slate-900">
@@ -230,12 +347,20 @@
             </h2>
             <p id="mk-sub" class="text-xs text-slate-500">Chargement…</p>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="flex flex-wrap items-center gap-3">
+            <div id="mk-custom" style="display:none">
+                <div class="flex items-center gap-2">
+                    <input type="date" id="mk-from" class="input !w-auto !py-2">
+                    <span class="text-slate-400">→</span>
+                    <input type="date" id="mk-to" class="input !w-auto !py-2">
+                </div>
+            </div>
             <div class="seg" id="mk-seg">
                 <button type="button" class="seg-btn" data-period="day">Jour</button>
                 <button type="button" class="seg-btn" data-period="week">Semaine</button>
                 <button type="button" class="seg-btn" data-period="month">Mois</button>
                 <button type="button" class="seg-btn" data-period="year">Année</button>
+                <button type="button" class="seg-btn" data-period="custom">Personnalisé</button>
             </div>
             <a href="{{ route('marketing.index') }}" class="text-sm font-medium text-blue-600 hover:text-blue-800">Détails</a>
         </div>
@@ -243,8 +368,7 @@
     <div id="mk-cards" class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3"></div>
 </div>
 
-
-{{-- Filtre de période --}}
+{{-- Filtre de période (statistiques) --}}
 <div class="mb-5 flex flex-wrap items-center justify-between gap-3">
     <h2 class="text-lg font-bold text-slate-900">Statistiques</h2>
     <div class="flex flex-wrap items-center gap-3">
@@ -255,13 +379,26 @@
             <button type="button" class="seg-btn" data-period="week">Semaine</button>
             <button type="button" class="seg-btn" data-period="month">Mois</button>
             <button type="button" class="seg-btn" data-period="year">Année</button>
+            <button type="button" class="seg-btn" data-period="custom">Personnalisé</button>
         </div>
         <select id="range" class="input !w-auto !py-2"></select>
+        <div id="custom-box" style="display:none">
+            <div class="flex flex-wrap items-center gap-2">
+                <input type="date" id="f-from" class="input !w-auto !py-2">
+                <span class="text-slate-400">→</span>
+                <input type="date" id="f-to" class="input !w-auto !py-2">
+                <button type="button" class="chip" data-preset="7">7 j</button>
+                <button type="button" class="chip" data-preset="30">30 j</button>
+                <button type="button" class="chip" data-preset="month">Ce mois</button>
+                <button type="button" class="chip" data-preset="lastmonth">Mois dernier</button>
+                <button type="button" class="chip" data-preset="year">Cette année</button>
+            </div>
+        </div>
     </div>
 </div>
 
 {{-- Nouveaux contacts --}}
-<div class="card mb-5 p-6">
+<div data-section="nouveaux_contacts" class="card mb-5 p-6">
     <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
             <h2 class="text-base font-bold text-slate-900">Nouveaux contacts</h2>
@@ -278,7 +415,7 @@
 
 <div class="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
     {{-- Origine --}}
-    <div class="card p-6">
+    <div data-section="origine" class="card p-6">
         <h2 class="text-base font-bold text-slate-900">Origine des contacts</h2>
         <div class="relative mx-auto mt-4 h-48 w-48">
             <canvas id="origin-chart"></canvas>
@@ -291,7 +428,7 @@
     </div>
 
     {{-- Messages --}}
-    <div class="card p-6 lg:col-span-2">
+    <div data-section="messages" class="card p-6 lg:col-span-2">
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
                 <h2 class="text-base font-bold text-slate-900">Messages envoyés</h2>
@@ -317,7 +454,7 @@
 
 {{-- Commandes --}}
 <div class="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
-    <div class="card p-6">
+    <div data-section="statut_commandes" class="card p-6">
         <h2 class="text-base font-bold text-slate-900">Statut des commandes</h2>
         <div class="relative mx-auto mt-4 h-48 w-48">
             <canvas id="statut-chart"></canvas>
@@ -329,7 +466,7 @@
         <ul id="statut-list" class="mt-5 space-y-2 text-sm"></ul>
     </div>
 
-    <div class="card p-6 lg:col-span-2">
+    <div data-section="commandes" class="card p-6 lg:col-span-2">
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
                 <h2 class="text-base font-bold text-slate-900">Commandes</h2>
@@ -353,7 +490,7 @@
 
 {{-- Conversion --}}
 <div class="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
-    <div class="card p-6 lg:col-span-2">
+    <div data-section="conversion" class="card p-6 lg:col-span-2">
         <h2 class="text-base font-bold text-slate-900">Taux de conversion</h2>
         <p class="text-sm text-slate-500">
             <span id="conv-conv" class="font-semibold text-slate-900">0</span> sur
@@ -365,7 +502,7 @@
             <p id="conv-empty" class="absolute inset-0 hidden items-center justify-center text-sm text-slate-400">Aucun contact sur cette période</p>
         </div>
     </div>
-    <div class="card p-6">
+    <div data-section="conversion_source" class="card p-6">
         <h2 class="text-base font-bold text-slate-900">Conversion par source</h2>
         <p class="text-sm text-slate-500">Quel canal amène des acheteurs</p>
         <ul id="conv-sources" class="mt-4 space-y-3"></ul>
@@ -374,7 +511,7 @@
 
 {{-- Fidélité --}}
 <div class="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-3">
-    <div class="card p-6 lg:col-span-2">
+    <div data-section="fidelite" class="card p-6 lg:col-span-2">
         <div class="flex flex-wrap items-start justify-between gap-3">
             <div>
                 <h2 class="text-base font-bold text-slate-900">Taux de fidélité</h2>
@@ -397,7 +534,7 @@
         </div>
         <p class="mt-3 text-xs text-slate-400">Fidèle = a commandé dans la période précédente et recommande dans celle-ci. Revenant = client plus ancien absent de la période précédente.</p>
     </div>
-    <div class="card p-6">
+    <div data-section="niveaux" class="card p-6">
         <h2 class="text-base font-bold text-slate-900">Niveaux de clients</h2>
         <p class="text-sm text-slate-500">Selon le nombre de commandes (VIP : 5+, Fidèle : 2 à 4)</p>
         <ul id="loy-tiers" class="mt-4 space-y-3"></ul>
@@ -405,7 +542,7 @@
 </div>
 
 <div class="mb-5 grid grid-cols-1 gap-5 lg:grid-cols-2">
-    <div class="card p-6">
+    <div data-section="top_clients" class="card p-6">
         <div class="mb-4 flex items-center justify-between">
             <h2 class="text-base font-bold text-slate-900">Meilleurs clients</h2>
             <a href="{{ route('commandes.classement') }}" class="text-sm font-medium text-blue-600 hover:text-blue-800">Classement complet</a>
@@ -413,7 +550,7 @@
         <ul id="top-clients" class="divide-y divide-slate-100"></ul>
     </div>
 
-    <div class="card p-6">
+    <div data-section="top_livres" class="card p-6">
         <div class="mb-4 flex items-center justify-between">
             <h2 class="text-base font-bold text-slate-900">Livres les plus commandés</h2>
             <a href="{{ route('commandes.classement') }}" class="text-sm font-medium text-blue-600 hover:text-blue-800">Voir plus</a>
@@ -424,7 +561,7 @@
 
 <div class="grid grid-cols-1 gap-5 lg:grid-cols-2">
     {{-- Derniers contacts --}}
-    <div class="card p-6">
+    <div data-section="derniers_contacts" class="card p-6">
         <div class="mb-4 flex items-center justify-between">
             <h2 class="text-base font-bold text-slate-900">Derniers contacts</h2>
             <a href="{{ route('contacts.index') }}" class="text-sm font-medium text-blue-600 hover:text-blue-800">Voir tout</a>
@@ -453,7 +590,7 @@
     </div>
 
     {{-- Dernières campagnes --}}
-    <div class="card p-6">
+    <div data-section="dernieres_campagnes" class="card p-6">
         <div class="mb-4 flex items-center justify-between">
             <h2 class="text-base font-bold text-slate-900">Dernières campagnes</h2>
             <a href="{{ route('campaigns.index') }}" class="text-sm font-medium text-blue-600 hover:text-blue-800">Voir tout</a>
@@ -474,7 +611,7 @@
     </div>
 
     {{-- Dernières commandes --}}
-    <div class="card p-6 lg:col-span-2">
+    <div data-section="dernieres_commandes" class="card p-6 lg:col-span-2">
         <div class="mb-4 flex items-center justify-between">
             <h2 class="text-base font-bold text-slate-900">Dernières commandes</h2>
             <a href="{{ route('commandes.index') }}" class="text-sm font-medium text-blue-600 hover:text-blue-800">Voir tout</a>
@@ -500,6 +637,182 @@
 
 @push('scripts')
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+
+{{-- Utilitaires de dates + panneau « Affichage » --}}
+<script>
+(function () {
+    window.isoDate = d => d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+
+    const S = window.dashSections;
+    const btn = document.getElementById('sections-btn');
+    const panel = document.getElementById('sections-panel');
+    const count = document.getElementById('sections-count');
+    const boxes = Array.from(panel.querySelectorAll('input[data-key]'));
+
+    function resizeCharts() {
+        if (!window.Chart) return;
+        setTimeout(() => Object.values(Chart.instances).forEach(c => c.resize()), 50);
+    }
+
+    function refresh() {
+        const hidden = S.get();
+        boxes.forEach(b => { b.checked = !hidden.includes(b.dataset.key); });
+        count.textContent = hidden.length + ' masquée' + (hidden.length > 1 ? 's' : '');
+        count.classList.toggle('hidden', hidden.length === 0);
+    }
+
+    function save() {
+        S.set(boxes.filter(b => !b.checked).map(b => b.dataset.key));
+        refresh();
+        resizeCharts();
+    }
+
+    boxes.forEach(b => b.addEventListener('change', save));
+    document.getElementById('sections-all').addEventListener('click', () => { boxes.forEach(b => b.checked = true); save(); });
+    document.getElementById('sections-none').addEventListener('click', () => { boxes.forEach(b => b.checked = false); save(); });
+    btn.addEventListener('click', e => { e.stopPropagation(); panel.classList.toggle('hidden'); });
+    panel.addEventListener('click', e => e.stopPropagation());
+    document.addEventListener('click', () => panel.classList.add('hidden'));
+    document.addEventListener('keydown', e => { if (e.key === 'Escape') panel.classList.add('hidden'); });
+
+    refresh();
+})();
+</script>
+
+{{-- Objectifs --}}
+<script>
+(function () {
+    const URL_OBJ = @json(route('objectifs.summary'));
+    const PAGE = @json(route('objectifs.index'));
+    const nf = new Intl.NumberFormat('fr-FR');
+    const $ = id => document.getElementById(id);
+    const st = { period: 'month', ref: null, prev: null, next: null };
+
+    const BADGES = {
+        reached:  ['Atteint',       'bg-emerald-50 text-emerald-700', '#10b981'],
+        on_track: ['En bonne voie', 'bg-blue-50 text-blue-700',       '#2563eb'],
+        late:     ['En retard',     'bg-amber-50 text-amber-700',     '#f59e0b'],
+        missed:   ['Manqué',        'bg-red-50 text-red-700',         '#ef4444'],
+        nodata:   ['Pas de donnée', 'bg-slate-100 text-slate-600',    '#94a3b8'],
+    };
+
+    function fmt(row, v) {
+        if (v === null || v === undefined) return '—';
+        if (row.type === 'money') return nf.format(Math.round(v)) + ' Ar';
+        if (row.type === 'rate') {
+            const d = row.decimals ?? 1;
+            return Number(v).toLocaleString('fr-FR', { minimumFractionDigits: d, maximumFractionDigits: d }) + ' %';
+        }
+        return nf.format(v);
+    }
+
+    function el(tag, cls, text) {
+        const e = document.createElement(tag);
+        if (cls) e.className = cls;
+        if (text !== undefined) e.textContent = text;
+        return e;
+    }
+
+    function card(row, json) {
+        const b = BADGES[row.status] || BADGES.nodata;
+        const c = el('div', 'card p-5');
+
+        const head = el('div', 'flex items-start justify-between gap-2');
+        head.appendChild(el('span', 'text-xs font-semibold uppercase tracking-wider text-slate-500', row.label));
+        const label = (row.inverse && row.status === 'reached') ? 'Respecté' : b[0];
+        head.appendChild(el('span', 'shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ' + b[1], label));
+        c.appendChild(head);
+
+        c.appendChild(el('div', 'mt-2 text-3xl font-bold text-slate-900', fmt(row, row.value)));
+
+        const sub = el('p', 'mt-1 text-xs text-slate-500');
+        sub.appendChild(document.createTextNode((row.inverse ? 'plafond' : 'objectif') + ' : '));
+        sub.appendChild(el('strong', 'text-slate-900', fmt(row, row.target)));
+        if (row.pct !== null && row.pct !== undefined) {
+            sub.appendChild(document.createTextNode(' · ' + nf.format(Math.round(row.pct)) + ' %'));
+        }
+        c.appendChild(sub);
+
+        const piste = el('div', 'relative mt-3 h-2 w-full rounded-full bg-slate-100');
+        const barre = el('div', 'h-2 rounded-full');
+        barre.style.width = Math.min(100, Math.max(0, row.pct || 0)) + '%';
+        barre.style.background = b[2];
+        piste.appendChild(barre);
+
+        if (row.cumulative && !row.inverse && json.is_current) {
+            const pace = Math.round(json.elapsed * 100);
+            const m = el('div', 'absolute -top-1 h-4 w-0.5 bg-slate-400');
+            m.style.left = pace + '%';
+            m.title = 'Rythme attendu : ' + pace + ' %';
+            piste.appendChild(m);
+        }
+        c.appendChild(piste);
+        return c;
+    }
+
+    function render(json) {
+        st.ref = json.ref; st.prev = json.prev_ref; st.next = json.next_ref;
+        $('ob-label').textContent = json.label;
+        $('ob-prev').disabled = !st.prev;
+        $('ob-next').disabled = !st.next;
+        $('ob-next').style.opacity = st.next ? '' : '0.4';
+        $('ob-link').href = PAGE + '?period=' + st.period + '&ref=' + encodeURIComponent(json.ref);
+
+        const c = json.counts;
+        const sum = $('ob-summary');
+        sum.innerHTML = '';
+        const pill = (t, cls) => sum.appendChild(el('span', 'rounded-full px-2.5 py-1 font-semibold ' + cls, t));
+        pill(json.items.length + ' objectif(s) fixé(s)', 'bg-slate-100 text-slate-700');
+        pill(c.reached + ' atteint(s)', 'bg-emerald-50 text-emerald-700');
+        pill(c.on_track + (json.is_current ? ' en bonne voie' : ' proche(s)'), 'bg-blue-50 text-blue-700');
+        pill((c.late + c.missed) + (json.is_current ? ' en retard' : ' manqué(s)'), 'bg-red-50 text-red-700');
+
+        $('ob-sub').textContent = json.is_current
+            ? 'Période en cours : ' + Math.round(json.elapsed * 100) + ' % écoulée'
+            : 'Période terminée';
+
+        const box = $('ob-cards');
+        box.innerHTML = '';
+        if (!json.items.length) {
+            const empty = el('div', 'card p-6 text-sm text-slate-500 sm:col-span-2 xl:col-span-3');
+            empty.appendChild(document.createTextNode('Aucun objectif fixé pour cette période. '));
+            const a = el('a', 'font-medium text-blue-600 hover:text-blue-800', 'Définir des objectifs');
+            a.href = $('ob-link').href;
+            empty.appendChild(a);
+            box.appendChild(empty);
+            return;
+        }
+        json.items.forEach(r => box.appendChild(card(r, json)));
+    }
+
+    async function load() {
+        document.querySelectorAll('#ob-seg [data-period]').forEach(b =>
+            b.classList.toggle('is-active', b.dataset.period === st.period));
+        try {
+            const res = await fetch(URL_OBJ + '?period=' + st.period + (st.ref ? '&ref=' + encodeURIComponent(st.ref) : ''), {
+                headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
+                credentials: 'same-origin',
+            });
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            render(await res.json());
+        } catch (e) {
+            $('ob-sub').textContent = 'Impossible de charger les objectifs.';
+        }
+    }
+
+    document.querySelectorAll('#ob-seg [data-period]').forEach(b => b.addEventListener('click', () => {
+        st.period = b.dataset.period;
+        st.ref = null;
+        load();
+    }));
+    $('ob-prev').addEventListener('click', () => { if (st.prev) { st.ref = st.prev; load(); } });
+    $('ob-next').addEventListener('click', () => { if (st.next) { st.ref = st.next; load(); } });
+
+    load();
+})();
+</script>
+
+{{-- Résumé marketing --}}
 <script>
 (function () {
     const URL = @json(route('marketing.summary'));
@@ -507,6 +820,11 @@
     const $ = id => document.getElementById(id);
     let period = 'day';
     let timer = null;
+
+    const t = new Date();
+    const f = new Date(); f.setDate(f.getDate() - 29);
+    $('mk-to').value = isoDate(t);
+    $('mk-from').value = isoDate(f);
 
     function fmt(k, v) {
         if (v === null || v === undefined) return '—';
@@ -539,11 +857,11 @@
         const b = document.createElement('span');
         b.className = 'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs font-semibold ' + cls;
         b.textContent = arrow + ' ' + txt;
-        const t = document.createElement('span');
-        t.className = 'ml-1 text-xs text-slate-400';
-        t.textContent = 'contre ' + fmt(k, k.previous) + ' avant';
+        const tt = document.createElement('span');
+        tt.className = 'ml-1 text-xs text-slate-400';
+        tt.textContent = 'contre ' + fmt(k, k.previous) + ' avant';
         wrap.appendChild(b);
-        wrap.appendChild(t);
+        wrap.appendChild(tt);
         return wrap;
     }
 
@@ -563,8 +881,14 @@
     }
 
     async function load() {
+        let q = '?period=' + period;
+        if (period === 'custom') {
+            const a = $('mk-from').value, b = $('mk-to').value;
+            if (!a || !b) return;
+            q += '&from=' + a + '&to=' + b;
+        }
         try {
-            const res = await fetch(URL + '?period=' + period, {
+            const res = await fetch(URL + q, {
                 headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
                 credentials: 'same-origin',
             });
@@ -582,6 +906,7 @@
     function sync() {
         document.querySelectorAll('#mk-seg [data-period]').forEach(b =>
             b.classList.toggle('is-active', b.dataset.period === period));
+        $('mk-custom').style.display = period === 'custom' ? '' : 'none';
     }
 
     document.querySelectorAll('#mk-seg [data-period]').forEach(b => b.addEventListener('click', () => {
@@ -589,6 +914,7 @@
         sync();
         load();
     }));
+    ['mk-from', 'mk-to'].forEach(id => $(id).addEventListener('change', load));
 
     // Actualisation automatique toutes les 30 s (en pause si l'onglet est caché)
     timer = setInterval(() => { if (!document.hidden) load(); }, 30000);
@@ -599,6 +925,7 @@
 })();
 </script>
 
+{{-- Statistiques --}}
 <script>
 (function () {
     const SOURCES = @json($sources);
@@ -607,15 +934,20 @@
     const CONTACT_URL = @json(url('/contacts'));
     const LOYALTY_URL = @json(route('dashboard.loyalty'));
     const RANGES = { day: [7, 30, 90], week: [4, 12, 26], month: [6, 12, 24], year: [3, 5, 10] };
-const DEFAULT_RANGE = { day: 30, week: 12, month: 12, year: 5 };
-const UNIT = { day: 'jours', week: 'semaines', month: 'mois', year: 'ans' };
+    const DEFAULT_RANGE = { day: 30, week: 12, month: 12, year: 5 };
+    const UNIT = { day: 'jours', week: 'semaines', month: 'mois', year: 'ans' };
     const CHANNELS = ['email', 'sms', 'messenger'];
     const TTL = 120000;
     const nf = new Intl.NumberFormat('fr-FR');
 
+    const now = new Date();
+    const d30 = new Date(); d30.setDate(d30.getDate() - 29);
+
     const state = {
         period: 'day',
         range: 30,
+        from: isoDate(d30),
+        to: isoDate(now),
         channel: 'email',
         cmdMode: 'commandes',
         active: new Set(SOURCES.map(s => s.key)),
@@ -843,13 +1175,11 @@ const UNIT = { day: 'jours', week: 'semaines', month: 'mois', year: 'ans' };
         const livrees = sum(data.commandes.livree || []);
         const valides = total - annulees;
 
-        // Doughnut + légende des statuts
         statutChart.data.datasets[0].data = totaux;
         statutChart.update();
         $('statut-total').textContent = nf.format(total);
         legendList($('statut-list'), STATUTS, totaux, total);
 
-        // Graphique principal (commandes par statut ou chiffre d'affaires)
         cmdChart.data.labels = data.labels;
         if (state.cmdMode === 'ca') {
             cmdChart.data.datasets = [dataset("Chiffre d'affaires", data.chiffre || [], '#2563eb')];
@@ -1090,6 +1420,8 @@ const UNIT = { day: 'jours', week: 'semaines', month: 'mois', year: 'ans' };
     }
 
     function syncControls() {
+        const custom = state.period === 'custom';
+
         document.querySelectorAll('#period-seg [data-period]').forEach(b =>
             b.classList.toggle('is-active', b.dataset.period === state.period));
         document.querySelectorAll('#channel-seg [data-channel]').forEach(b =>
@@ -1097,23 +1429,32 @@ const UNIT = { day: 'jours', week: 'semaines', month: 'mois', year: 'ans' };
         document.querySelectorAll('#cmd-seg [data-mode]').forEach(b =>
             b.classList.toggle('is-active', b.dataset.mode === state.cmdMode));
 
-        const sel = $('range');
-        sel.innerHTML = '';
-        RANGES[state.period].forEach(n => {
-            const o = document.createElement('option');
-            o.value = n;
-            o.textContent = 'Derniers ' + n + ' ' + UNIT[state.period];
-            o.selected = n === state.range;
-            sel.appendChild(o);
-        });
+        $('range').style.display = custom ? 'none' : '';
+        $('custom-box').style.display = custom ? '' : 'none';
+        $('f-from').value = state.from;
+        $('f-to').value = state.to;
+
+        if (!custom) {
+            const sel = $('range');
+            sel.innerHTML = '';
+            RANGES[state.period].forEach(n => {
+                const o = document.createElement('option');
+                o.value = n;
+                o.textContent = 'Derniers ' + n + ' ' + UNIT[state.period];
+                o.selected = n === state.range;
+                sel.appendChild(o);
+            });
+        }
     }
 
-    async function fetchStats(period, range) {
-        const key = period + '-' + range;
+    async function fetchStats(period, range, from, to) {
+        const custom = period === 'custom';
+        const key = custom ? 'custom-' + from + '-' + to : period + '-' + range;
         const hit = cache.get(key);
         if (hit && Date.now() - hit.at < TTL) return hit.json;
 
-        const res = await fetch(STATS_URL + '?period=' + period + '&range=' + range, {
+        const q = custom ? '?period=custom&from=' + from + '&to=' + to : '?period=' + period + '&range=' + range;
+        const res = await fetch(STATS_URL + q, {
             headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
             credentials: 'same-origin',
         });
@@ -1125,19 +1466,22 @@ const UNIT = { day: 'jours', week: 'semaines', month: 'mois', year: 'ans' };
     }
 
     async function load() {
+        if (state.period === 'custom' && (!state.from || !state.to)) return;
+
         const id = ++reqId;
         $('loading').classList.remove('hidden');
         $('error').classList.add('hidden');
 
         try {
-            const json = await fetchStats(state.period, state.range);
+            const json = await fetchStats(state.period, state.range, state.from, state.to);
             if (id !== reqId) return;           // une réponse plus récente est déjà arrivée
             data = json;
             renderAll();
 
             if (!prefetched) {                  // précharge les autres périodes pour des changements instantanés
                 prefetched = true;
-                ['week', 'month', 'year'].forEach(p => fetchStats(p, DEFAULT_RANGE[p]).catch(() => {}));            }
+                ['week', 'month', 'year'].forEach(p => fetchStats(p, DEFAULT_RANGE[p]).catch(() => {}));
+            }
         } catch (e) {
             if (id === reqId) $('error').classList.remove('hidden');
         } finally {
@@ -1147,7 +1491,7 @@ const UNIT = { day: 'jours', week: 'semaines', month: 'mois', year: 'ans' };
 
     document.querySelectorAll('#period-seg [data-period]').forEach(b => b.addEventListener('click', () => {
         state.period = b.dataset.period;
-        state.range = DEFAULT_RANGE[state.period];
+        if (state.period !== 'custom') state.range = DEFAULT_RANGE[state.period];
         syncControls();
         load();
     }));
@@ -1168,6 +1512,30 @@ const UNIT = { day: 'jours', week: 'semaines', month: 'mois', year: 'ans' };
         state.range = parseInt(e.target.value, 10);
         load();
     });
+
+    // Dates personnalisées
+    ['f-from', 'f-to'].forEach(id => $(id).addEventListener('change', () => {
+        state.from = $('f-from').value;
+        state.to = $('f-to').value;
+        load();
+    }));
+
+    // Raccourcis de dates
+    document.querySelectorAll('#custom-box [data-preset]').forEach(b => b.addEventListener('click', () => {
+        const t = new Date();
+        let a = new Date(), z = new Date();
+        switch (b.dataset.preset) {
+            case '7':         a.setDate(t.getDate() - 6); break;
+            case '30':        a.setDate(t.getDate() - 29); break;
+            case 'month':     a = new Date(t.getFullYear(), t.getMonth(), 1); break;
+            case 'lastmonth': a = new Date(t.getFullYear(), t.getMonth() - 1, 1); z = new Date(t.getFullYear(), t.getMonth(), 0); break;
+            case 'year':      a = new Date(t.getFullYear(), 0, 1); break;
+        }
+        state.from = isoDate(a);
+        state.to = isoDate(z);
+        syncControls();
+        load();
+    }));
 
     syncControls();
     load();

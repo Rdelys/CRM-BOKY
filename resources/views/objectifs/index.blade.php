@@ -51,15 +51,18 @@
 
     <div class="flex flex-wrap items-center gap-3">
         <div class="seg">
-            <a href="{{ route('objectifs.index', ['period' => 'month']) }}" class="seg-btn {{ $period === 'month' ? 'is-active' : '' }}">Mensuel</a>
-            <a href="{{ route('objectifs.index', ['period' => 'year']) }}" class="seg-btn {{ $period === 'year' ? 'is-active' : '' }}">Annuel</a>
-        </div>
+    <a href="{{ route('objectifs.index', ['period' => 'day']) }}" class="seg-btn {{ $period === 'day' ? 'is-active' : '' }}">Journalier</a>
+    <a href="{{ route('objectifs.index', ['period' => 'month']) }}" class="seg-btn {{ $period === 'month' ? 'is-active' : '' }}">Mensuel</a>
+    <a href="{{ route('objectifs.index', ['period' => 'year']) }}" class="seg-btn {{ $period === 'year' ? 'is-active' : '' }}">Annuel</a>
+</div>
 
         <div class="flex items-center gap-1">
             <a href="{{ $q($r['prev_ref']) }}" class="btn-outline" aria-label="Période précédente">←</a>
             <form method="GET" action="{{ route('objectifs.index') }}">
                 <input type="hidden" name="period" value="{{ $period }}">
-                @if($period === 'month')
+                @if($period === 'day')
+                    <input type="date" name="ref" value="{{ $r['ref'] }}" max="{{ now()->toDateString() }}" class="input !w-auto !py-2" onchange="this.form.submit()">
+                @elseif($period === 'month')
                     <input type="month" name="ref" value="{{ $r['ref'] }}" class="input !w-auto !py-2" onchange="this.form.submit()">
                 @else
                     <input type="number" name="ref" value="{{ $r['ref'] }}" min="2015" max="{{ now()->year + 1 }}" class="input !w-28 !py-2" onchange="this.form.submit()">

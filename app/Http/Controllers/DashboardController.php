@@ -103,26 +103,35 @@ class DashboardController extends Controller
         return view('dashboard', compact('stats', 'latestContacts', 'latestCampaigns', 'latestCommandes'));
     }
 
-    /** Données des graphiques (JSON), filtrées par période. */
+    /** Données des graphiques (JSON) : N dernières unités, ou plage personnalisée (from/to). */
     public function stats(Request $request): JsonResponse
     {
-        $period = in_array($request->query('period'), ['day', 'week', 'month', 'year'], true)
+        $period = in_array($request->query('period'), ['day', 'week', 'month', 'year', 'custom'], true)
             ? $request->query('period')
             : 'day';
 
-        $cfg   = self::RANGES[$period];
-        $range = max($cfg['min'], min($cfg['max'], (int) $request->query('range', $cfg['default'])));
+        $range = null;
+        $from = $to = null;
+        $gran = $period;
 
-        [$start, $keys, $labels, $titles] = $this->buckets($period, $range);
+        if ($period === 'custom') {
+            [$from, $to, $gran] = $this->customRange($request);   // $to = lendemain (exclu)
+        } else {
+            $cfg   = self::RANGES[$period];
+            $range = max($cfg['min'], min($cfg['max'], (int) $request->query('range', $cfg['default'])));
+        }
+
+        [$start, $end, $keys, $labels, $titles] = $this->buckets($gran, $range, $from, $to);
         $index = array_flip($keys);
         $zeros = array_fill(0, count($keys), 0);
+        $period = $gran; // les regroupements SQL utilisent la granularité effective
 
         // Contacts par source
         $contacts = array_fill_keys(array_keys(Contact::SOURCES), $zeros);
 
         $rows = Contact::query()
             ->selectRaw($this->bucketExpr(self::CONTACT_DATE, $period) . ' as bucket_key, source, COUNT(*) as total')
-            ->whereRaw(self::CONTACT_DATE . ' >= ?', [$start])
+            ->whereRaw(self::CONTACT_DATE . ' >= ? and ' . self::CONTACT_DATE . ' < ?', [$start, $end])
             ->groupBy('bucket_key', 'source')
             ->get();
 
@@ -145,7 +154,7 @@ class DashboardController extends Controller
         $rows = MessageLog::query()
             ->selectRaw($this->bucketExpr($dateExpr, $period) . ' as bucket_key, channel, status, COUNT(*) as total')
             ->whereIn('status', ['sent', 'failed'])
-            ->whereRaw($dateExpr . ' >= ?', [$start])
+            ->whereRaw($dateExpr . ' >= ? and ' . $dateExpr . ' < ?', [$start, $end])
             ->groupBy('bucket_key', 'channel', 'status')
             ->get();
 
@@ -162,6 +171,7 @@ class DashboardController extends Controller
         $rows = Commande::query()
             ->selectRaw($this->bucketExpr('date_commande', $period) . ' as bucket_key, statut, COUNT(*) as total, COALESCE(SUM(montant_total), 0) as ca')
             ->where('date_commande', '>=', $start)
+            ->where('date_commande', '<', $end)
             ->groupBy('bucket_key', 'statut')
             ->get();
 
@@ -176,19 +186,20 @@ class DashboardController extends Controller
         }
 
         // Conversion : contacts arrivés dans la période et ceux qui ont commandé depuis
-        $conv   = ['contacts' => $zeros, 'converted' => $zeros, 'rate' => array_fill(0, count($keys), null)];
-        $bucket = $this->bucketExpr(self::CONTACT_DATE, $period);
+        $conv    = ['contacts' => $zeros, 'converted' => $zeros, 'rate' => array_fill(0, count($keys), null)];
+        $bucket  = $this->bucketExpr(self::CONTACT_DATE, $period);
+        $between = self::CONTACT_DATE . ' >= ? and ' . self::CONTACT_DATE . ' < ?';
 
         $totaux = Contact::query()
             ->selectRaw("{$bucket} as bucket_key, COUNT(*) as total")
-            ->whereRaw(self::CONTACT_DATE . ' >= ?', [$start])
+            ->whereRaw($between, [$start, $end])
             ->groupBy('bucket_key')
             ->pluck('total', 'bucket_key');
 
         $convertis = Contact::query()
             ->whereIn('contacts.id', $this->convertedIds())
             ->selectRaw("{$bucket} as bucket_key, COUNT(*) as total")
-            ->whereRaw(self::CONTACT_DATE . ' >= ?', [$start])
+            ->whereRaw($between, [$start, $end])
             ->groupBy('bucket_key')
             ->pluck('total', 'bucket_key');
 
@@ -202,14 +213,14 @@ class DashboardController extends Controller
 
         $srcTotaux = Contact::query()
             ->selectRaw('source, COUNT(*) as total')
-            ->whereRaw(self::CONTACT_DATE . ' >= ?', [$start])
+            ->whereRaw($between, [$start, $end])
             ->groupBy('source')
             ->pluck('total', 'source');
 
         $srcConvertis = Contact::query()
             ->whereIn('contacts.id', $this->convertedIds())
             ->selectRaw('source, COUNT(*) as total')
-            ->whereRaw(self::CONTACT_DATE . ' >= ?', [$start])
+            ->whereRaw($between, [$start, $end])
             ->groupBy('source')
             ->pluck('total', 'source');
 
@@ -221,8 +232,11 @@ class DashboardController extends Controller
         ])->values()->all();
 
         return response()->json([
-            'period'      => $period,
+            'period'      => $request->query('period') === 'custom' ? 'custom' : $period,
+            'granularity' => $period,
             'range'       => $range,
+            'from'        => $start->toDateString(),
+            'to'          => $end->copy()->subDay()->toDateString(),
             'labels'      => $labels,
             'titles'      => $titles,
             'contacts'    => $contacts,
@@ -230,8 +244,8 @@ class DashboardController extends Controller
             'commandes'   => $commandes,
             'chiffre'     => $chiffre,
             'conversion'  => $conv,
-            'top_clients' => $this->topClients($start),
-            'top_livres'  => Commande::topLivres($start, 5),
+            'top_clients' => $this->topClients($start, $end),
+            'top_livres'  => Commande::topLivres($start, 5, $end),
         ]);
     }
 
@@ -246,13 +260,40 @@ class DashboardController extends Controller
         return response()->json($this->loyaltyData($months, self::LOYALTY_UNITS[$months]));
     }
 
+    /** Plage personnalisée : [début, lendemain de la fin (exclu), granularité automatique]. */
+    private function customRange(Request $request): array
+    {
+        $isDate = fn ($v) => is_string($v) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $v);
+
+        try {
+            $from = $isDate($request->query('from')) ? Carbon::parse($request->query('from'))->startOfDay() : today()->subDays(29);
+            $to   = $isDate($request->query('to')) ? Carbon::parse($request->query('to'))->startOfDay() : today();
+        } catch (\Throwable) {
+            $from = today()->subDays(29);
+            $to   = today();
+        }
+
+        if ($from->gt($to)) {
+            [$from, $to] = [$to, $from];
+        }
+        if ($from->diffInDays($to) > 3660) {            // garde-fou : 10 ans maximum
+            $from = $to->copy()->subDays(3660);
+        }
+
+        $days = (int) $from->diffInDays($to) + 1;
+        $gran = $days <= 92 ? 'day' : ($days <= 400 ? 'week' : ($days <= 1830 ? 'month' : 'year'));
+
+        return [$from, $to->copy()->addDay(), $gran];
+    }
+
     /** Meilleurs clients de la période : classés par nombre de commandes (le montant ne départage que les égalités). */
-    private function topClients(CarbonInterface $start): array
+    private function topClients(CarbonInterface $start, CarbonInterface $end): array
     {
         $lignes = Commande::query()
             ->selectRaw('contact_id, COUNT(*) as nb, COALESCE(SUM(montant_total), 0) as total')
             ->where('statut', '!=', 'annulee')
             ->where('date_commande', '>=', $start)
+            ->where('date_commande', '<', $end)
             ->groupBy('contact_id')
             ->orderByDesc('nb')
             ->orderByDesc('total')
@@ -392,74 +433,98 @@ class DashboardController extends Controller
         return $s->translatedFormat($long ? 'F Y' : 'M y') . ' → ' . $last->translatedFormat($long ? 'F Y' : 'M y');
     }
 
-    /** @return array{0: CarbonInterface, 1: string[], 2: string[], 3: string[]} */
-    private function buckets(string $period, int $range): array
+    /**
+     * Découpe en tranches : soit les $range dernières unités, soit [$from, $to[ (plage personnalisée).
+     *
+     * @return array{0: CarbonInterface, 1: CarbonInterface, 2: string[], 3: string[], 4: string[]}
+     *         [début de requête, fin exclue, clés, libellés, titres]
+     */
+    private function buckets(string $gran, ?int $range, ?CarbonInterface $from = null, ?CarbonInterface $to = null): array
     {
+        if ($from === null) {
+            $from = match ($gran) {
+                'day'   => today()->subDays($range - 1),
+                'week'  => now()->startOfWeek()->subWeeks($range - 1),
+                'month' => now()->startOfMonth()->subMonths($range - 1),
+                default => now()->startOfYear()->subYears($range - 1),
+            };
+            $to = match ($gran) {
+                'day'   => today()->addDay(),
+                'week'  => now()->startOfWeek()->addWeek(),
+                'month' => now()->startOfMonth()->addMonth(),
+                default => now()->startOfYear()->addYear(),
+            };
+        }
+
+        // La première tranche démarre au début de l'unité (la requête garde la date exacte choisie)
+        $cursor = match ($gran) {
+            'day'   => $from->copy()->startOfDay(),
+            'week'  => $from->copy()->startOfWeek(),
+            'month' => $from->copy()->startOfMonth(),
+            default => $from->copy()->startOfYear(),
+        };
+
         $keys = $labels = $titles = [];
 
-        if ($period === 'day') {
-            $start = today()->subDays($range - 1);
-            for ($i = 0; $i < $range; $i++) {
-                $d = $start->copy()->addDays($i);
-                $keys[]   = $d->format('Y-m-d');
-                $labels[] = $d->format('d/m');
-                $titles[] = $d->locale('fr')->translatedFormat('l d F Y');
-            }
-        } elseif ($period === 'week') {
-            $start = now()->startOfWeek()->subWeeks($range - 1);
-            for ($i = 0; $i < $range; $i++) {
-                $d = $start->copy()->addWeeks($i);
-                $keys[]   = $d->format('Y-m-d');                 // lundi de la semaine
-                $labels[] = $d->format('d/m');
-                $titles[] = 'Semaine du ' . $d->locale('fr')->translatedFormat('d F Y');
-            }
-        } elseif ($period === 'month') {
-            $start = now()->startOfMonth()->subMonths($range - 1);
-            for ($i = 0; $i < $range; $i++) {
-                $d = $start->copy()->addMonthsNoOverflow($i);
-                $keys[]   = $d->format('Y-m');
-                $labels[] = $d->locale('fr')->translatedFormat('M Y');
-                $titles[] = $d->locale('fr')->translatedFormat('F Y');
-            }
-        } else {
-            $start = now()->startOfYear()->subYears($range - 1);
-            for ($i = 0; $i < $range; $i++) {
-                $d = $start->copy()->addYears($i);
-                $keys[]   = $d->format('Y');
-                $labels[] = $d->format('Y');
-                $titles[] = 'Année ' . $d->format('Y');
+        while ($cursor->lt($to)) {
+            $d = $cursor->copy()->locale('fr');
+
+            switch ($gran) {
+                case 'day':
+                    $keys[]   = $cursor->format('Y-m-d');
+                    $labels[] = $cursor->format('d/m');
+                    $titles[] = $d->translatedFormat('l d F Y');
+                    $cursor->addDay();
+                    break;
+                case 'week':
+                    $keys[]   = $cursor->format('Y-m-d');            // lundi de la semaine
+                    $labels[] = $cursor->format('d/m');
+                    $titles[] = 'Semaine du ' . $d->translatedFormat('d F Y');
+                    $cursor->addWeek();
+                    break;
+                case 'month':
+                    $keys[]   = $cursor->format('Y-m');
+                    $labels[] = $d->translatedFormat('M Y');
+                    $titles[] = $d->translatedFormat('F Y');
+                    $cursor->addMonthNoOverflow();
+                    break;
+                default:
+                    $keys[]   = $cursor->format('Y');
+                    $labels[] = $cursor->format('Y');
+                    $titles[] = 'Année ' . $cursor->format('Y');
+                    $cursor->addYear();
             }
         }
 
-        return [$start, $keys, $labels, $titles];
+        return [$from, $to, $keys, $labels, $titles];
     }
 
-    /** Expression SQL qui regroupe une date par jour, mois ou année (MySQL, PostgreSQL, SQLite). */
+    /** Expression SQL qui regroupe une date par jour, semaine, mois ou année (MySQL, PostgreSQL, SQLite). */
     private function bucketExpr(string $column, string $period): string
-{
-    $driver = DB::connection()->getDriverName();
+    {
+        $driver = DB::connection()->getDriverName();
 
-    // Semaine : on regroupe par date du lundi
-    if ($period === 'week') {
+        // Semaine : on regroupe par date du lundi
+        if ($period === 'week') {
+            return match ($driver) {
+                'sqlite' => "date({$column}, 'weekday 0', '-6 days')",
+                'pgsql'  => "to_char(date_trunc('week', {$column}), 'YYYY-MM-DD')",
+                default  => "DATE_FORMAT(DATE_SUB(DATE({$column}), INTERVAL WEEKDAY({$column}) DAY), '%Y-%m-%d')",
+            };
+        }
+
+        $format = match ($period) {
+            'year'  => '%Y',
+            'month' => '%Y-%m',
+            default => '%Y-%m-%d',
+        };
+
         return match ($driver) {
-            'sqlite' => "date({$column}, 'weekday 0', '-6 days')",
-            'pgsql'  => "to_char(date_trunc('week', {$column}), 'YYYY-MM-DD')",
-            default  => "DATE_FORMAT(DATE_SUB(DATE({$column}), INTERVAL WEEKDAY({$column}) DAY), '%Y-%m-%d')",
+            'sqlite' => "strftime('{$format}', {$column})",
+            'pgsql'  => "to_char({$column}, '" . str_replace(['%Y', '%m', '%d'], ['YYYY', 'MM', 'DD'], $format) . "')",
+            default  => "DATE_FORMAT({$column}, '{$format}')",
         };
     }
-
-    $format = match ($period) {
-        'year'  => '%Y',
-        'month' => '%Y-%m',
-        default => '%Y-%m-%d',
-    };
-
-    return match ($driver) {
-        'sqlite' => "strftime('{$format}', {$column})",
-        'pgsql'  => "to_char({$column}, '" . str_replace(['%Y', '%m', '%d'], ['YYYY', 'MM', 'DD'], $format) . "')",
-        default  => "DATE_FORMAT({$column}, '{$format}')",
-    };
-}
 
     /** Date d'un envoi : sent_at, sinon la dernière mise à jour (cas d'un échec). */
     private function logDateExpr(): string
