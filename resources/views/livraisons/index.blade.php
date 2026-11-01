@@ -1,4 +1,4 @@
-@extends('layouts.app')
+@extends('layouts.crm')
 @section('title', 'Frais de livraison')
 
 @section('content')
