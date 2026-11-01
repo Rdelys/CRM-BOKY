@@ -13,7 +13,7 @@ class MarketingSpend extends Model
         'other'    => 'Autre',
     ];
 
-    protected $fillable = ['spent_on', 'channel', 'amount', 'label'];
+    protected $fillable = ['spent_on', 'channel', 'amount', 'label', 'external_key'];
 
     protected $casts = ['spent_on' => 'date', 'amount' => 'integer'];
 }

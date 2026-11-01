@@ -91,7 +91,10 @@ class MarketingController extends Controller
         return back()->with('success', 'Dépense supprimée.');
     }
 
-    /** Lance l'import de la visibilité Facebook (90 derniers jours). */
+    /**
+     * Lance l'import de la visibilité Facebook (90 derniers jours)
+     * puis celui des dépenses publicitaires (boosts), si le compte publicitaire est configuré.
+     */
     public function syncInsights()
     {
         $code = Artisan::call('crm:sync-fb-insights', ['--days' => 90]);
@@ -101,6 +104,22 @@ class MarketingController extends Controller
             return back()->withErrors(['insights' => 'Import de la visibilité impossible. ' . $output]);
         }
 
-        return back()->with('success', $output ?: 'Visibilité Facebook mise à jour.');
+        $message = $output ?: 'Visibilité Facebook mise à jour.';
+
+        // Dépenses publicitaires : facultatif tant que FB_ADS_TOKEN / FB_AD_ACCOUNT_ID ne sont pas renseignés
+        if (config('crm.facebook.ads_token') && config('crm.facebook.ad_account_id')) {
+            $spendCode = Artisan::call('crm:sync-fb-spend', ['--days' => 90]);
+            $spendOutput = trim(Artisan::output());
+
+            if ($spendCode !== 0) {
+                return back()
+                    ->with('success', $message)
+                    ->withErrors(['insights' => 'Import des dépenses publicitaires impossible. ' . $spendOutput]);
+            }
+
+            $message .= ' ' . ($spendOutput ?: 'Dépenses publicitaires mises à jour.');
+        }
+
+        return back()->with('success', $message);
     }
 }

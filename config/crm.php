@@ -25,6 +25,14 @@ return [
         'page_id'      => env('FB_PAGE_ID'),
         'graph'        => 'https://graph.facebook.com/v21.0',
 
+        // Dépenses publicitaires (API Marketing) : boosts et publicités
+        // Le token doit avoir la permission ads_read (token utilisateur système conseillé).
+        'ads_token'     => env('FB_ADS_TOKEN'),
+        'ad_account_id' => env('FB_AD_ACCOUNT_ID'),   // avec ou sans le préfixe « act_ »
+        // Multiplicateur vers l'Ariary : 1 si le compte publicitaire est déjà en MGA,
+        // sinon par ex. 4500 si le compte est en USD (1 USD ≈ 4 500 Ar).
+        'ads_rate'      => (float) env('FB_ADS_RATE', 1),
+
         // Métriques de visibilité (Page Insights)
         'insight_metrics' => [
             'views'       => env('FB_METRIC_VIEWS', 'page_media_view'),
