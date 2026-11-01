@@ -13,6 +13,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\FacebookWebhookController;
 use App\Http\Controllers\MarketingController;
 use App\Http\Controllers\ObjectifController;
+use App\Http\Controllers\DeliveryFeeController;
 
 // Réception des prospects depuis le siteweb (protégé par jeton, sans CSRF)
 Route::post('/leads', [LeadController::class, 'store'])
@@ -76,6 +77,13 @@ Route::middleware('auth')->group(function () {
     Route::post('/objectifs/reprendre', [ObjectifController::class, 'copy'])->name('objectifs.copy');
 Route::get('/objectifs/resume', [ObjectifController::class, 'summary'])->name('objectifs.summary');
 
+
+    // Frais de livraison
+    Route::post('/livraisons/lien/activer', [DeliveryFeeController::class, 'toggleShare'])->name('livraisons.share.toggle');
+    Route::post('/livraisons/lien/regenerer', [DeliveryFeeController::class, 'regenerateShare'])->name('livraisons.share.regenerate');
+    Route::resource('livraisons', DeliveryFeeController::class)->except('show');
+
+
     Route::resource('campaigns', CampaignController::class)->only(['index', 'create', 'store', 'show', 'destroy']);
     Route::post('/campaigns/{campaign}/send', [CampaignController::class, 'send'])->name('campaigns.send');
     Route::post('/campaigns/{campaign}/relaunch', [CampaignController::class, 'relaunch'])->name('campaigns.relaunch');
@@ -85,6 +93,11 @@ Route::get('/objectifs/resume', [ObjectifController::class, 'summary'])->name('o
     Route::post('/campaigns/{campaign}/test', [CampaignController::class, 'test'])->name('campaigns.test');
 });
 
+// Page publique des frais de livraison (lien partagé aux commerciaux, sans accès CRM)
+Route::get('/frais-livraison/{token}', [DeliveryFeeController::class, 'publicPage'])
+    ->middleware('throttle:60,1')
+    ->name('livraisons.public');
+    
 Route::get('/webhooks/facebook', [FacebookWebhookController::class, 'verify']);
 Route::post('/webhooks/facebook', [FacebookWebhookController::class, 'receive'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class]);

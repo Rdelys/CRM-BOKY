@@ -17,8 +17,9 @@
         ['route' => 'commandes.classement', 'match' => 'commandes.classement', 'label' => 'Meilleurs clients', 'icon' => '<path d="M8 21h8M12 17v4M7 4h10v5a5 5 0 01-10 0V4z"/><path d="M17 5h3v2a3 3 0 01-3 3M7 5H4v2a3 3 0 003 3"/>'],
         ['route' => 'campaigns.index',    'match' => 'campaigns.*', 'label' => 'Campagnes',       'icon' => '<path d="M22 2L11 13"/><path d="M22 2l-7 20-4-9-9-4 20-7z"/>'],
         ['route' => 'marketing.index', 'match' => 'marketing.*', 'label' => 'Marketing', 'icon' => '<path d="M3 3v18h18"/><path d="M7 15l4-4 3 3 5-7"/>'],
+                ['route' => 'objectifs.index', 'match' => 'objectifs.*', 'label' => 'Objectifs', 'icon' => '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'],
         ['route' => 'password.edit',      'match' => 'password.*',  'label' => 'Mot de passe',    'icon' => '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>'],
-        ['route' => 'objectifs.index', 'match' => 'objectifs.*', 'label' => 'Objectifs', 'icon' => '<circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>'],
+        ['route' => 'livraisons.index', 'match' => 'livraisons.*', 'label' => 'Frais de livraison', 'icon' => '<rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>'],
     ];
     $user = auth()->user();
 @endphp
