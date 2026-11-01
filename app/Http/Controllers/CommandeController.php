@@ -18,7 +18,7 @@ class CommandeController extends Controller
 {
     private const CHAMPS = [
         'date_commande', 'adresse_livraison', 'livres', 'mode_paiement', 'date_livraison',
-        'heure_livraison', 'precision_heure', 'responsable', 'montant_total', 'statut', 'notes',
+        'heure_livraison', 'precision_heure', 'responsable', 'montant_total', 'frais_livraison', 'statut', 'notes',
     ];
 
     /** En-têtes du fichier Excel / Google Forms => colonne du CRM (comparaison exacte). */
@@ -36,6 +36,7 @@ class CommandeController extends Controller
         'precision_heure' => 'precision_heure', 'precision_de_l_heure' => 'precision_heure',
         'responsable' => 'responsable',
         'montant_total' => 'montant_total', 'montant' => 'montant_total', 'total' => 'montant_total',
+        'frais_livraison' => 'frais_livraison', 'frais_de_livraison' => 'frais_livraison', 'frais' => 'frais_livraison',
         'statut' => 'statut', 'statut_de_la_commande' => 'statut',
         'notes' => 'notes',
     ];
@@ -49,6 +50,7 @@ class CommandeController extends Controller
         'farito_ny_ora' => 'precision_heure',
         'laharana'      => 'telephone',
         'statut_de'     => 'statut',
+        'frais_de'      => 'frais_livraison',
     ];
 
     private const MOIS_FR = [
@@ -104,7 +106,7 @@ class CommandeController extends Controller
 
     public function create(Request $request)
     {
-        $commande = new Commande(['statut' => 'confirmee', 'date_commande' => now()]);
+        $commande = new Commande(['statut' => 'confirmee', 'date_commande' => now(), 'frais_livraison' => 0]);
 
         $source = $request->filled('depuis') ? Commande::find($request->query('depuis')) : null;
         $contactId = $request->old('contact_id') ?? $request->query('contact_id') ?? $source?->contact_id;
@@ -112,7 +114,9 @@ class CommandeController extends Controller
 
         if ($source) {
             // « Recommander » : on reprend les informations de la commande précédente
-            $commande->fill($source->only(['adresse_livraison', 'livres', 'mode_paiement', 'responsable', 'montant_total']));
+            $commande->fill($source->only([
+                'adresse_livraison', 'livres', 'mode_paiement', 'responsable', 'montant_total', 'frais_livraison',
+            ]));
         } elseif ($contact) {
             $derniere = $contact->commandes()->latest('date_commande')->first();
             if ($derniere) {
@@ -161,9 +165,9 @@ class CommandeController extends Controller
             $commande->update($donnees + ['contact_id' => $contact->id]);
         });
 
-        // L'ancien client peut ne plus avoir de commande active
+        // L'ancien client peut ne plus avoir de commande active : on resynchronise son statut
         if ($ancienContactId !== (int) $commande->contact_id) {
-            Contact::find($ancienContactId)?->where('statut', 'livree');
+            Contact::find($ancienContactId)?->synchroniserStatutClient();
         }
 
         return redirect()->route('commandes.index')
@@ -386,6 +390,7 @@ class CommandeController extends Controller
                         'precision_heure'   => $precision !== '' ? mb_substr($precision, 0, 255) : null,
                         'responsable'       => $responsable !== '' ? mb_substr($responsable, 0, 120) : null,
                         'montant_total'     => $this->lireMontant($d['montant_total'] ?? ''),
+                        'frais_livraison'   => $this->lireMontant($d['frais_livraison'] ?? ''),
                         'statut'            => $this->lireStatut($d['statut'] ?? ''),
                         'notes'             => $d['notes'] ?? null,
                     ], fn ($v) => $v !== null && $v !== '');
@@ -403,10 +408,11 @@ class CommandeController extends Controller
                         $misAJour++;
                     } else {
                         Commande::create($attributs + [
-                            'contact_id'    => $contact->id,
-                            'date_commande' => now(),
-                            'statut'        => 'confirmee',
-                            'montant_total' => 0,
+                            'contact_id'      => $contact->id,
+                            'date_commande'   => now(),
+                            'statut'          => 'confirmee',
+                            'montant_total'   => 0,
+                            'frais_livraison' => 0,
                         ]);
                         $crees++;
                     }
@@ -443,6 +449,7 @@ class CommandeController extends Controller
             'precision_heure'   => 'nullable|string|max:255',
             'responsable'       => 'nullable|string|max:120',
             'montant_total'     => 'nullable|integer|min:0',
+            'frais_livraison'   => 'nullable|integer|min:0',
             'statut'            => ['required', Rule::in(array_keys(Commande::STATUTS))],
             'notes'             => 'nullable|string|max:2000',
         ];
@@ -488,6 +495,7 @@ class CommandeController extends Controller
             'precision_heure'   => 'précision de l\'heure',
             'responsable'       => 'responsable',
             'montant_total'     => 'montant total',
+            'frais_livraison'   => 'frais de livraison',
             'statut'            => 'statut',
             'notes'             => 'notes',
         ]);
@@ -505,6 +513,7 @@ class CommandeController extends Controller
         }
 
         $c['montant_total'] = (int) ($c['montant_total'] ?? 0);
+        $c['frais_livraison'] = (int) ($c['frais_livraison'] ?? 0);
 
         return $c;
     }

@@ -33,13 +33,14 @@ class Commande extends Model
     protected $fillable = [
         'contact_id', 'date_commande', 'adresse_livraison', 'livres', 'mode_paiement',
         'date_livraison', 'heure_livraison', 'precision_heure', 'responsable',
-        'montant_total', 'statut', 'notes',
+        'montant_total', 'frais_livraison', 'statut', 'notes',
     ];
 
     protected $casts = [
-        'date_commande'  => 'datetime',
-        'date_livraison' => 'date',
-        'montant_total'  => 'integer',
+        'date_commande'   => 'datetime',
+        'date_livraison'  => 'date',
+        'montant_total'   => 'integer',
+        'frais_livraison' => 'integer',
     ];
 
     protected static function booted(): void
@@ -59,6 +60,12 @@ class Commande extends Model
         return $this->belongsTo(Contact::class);
     }
 
+    /** Montant hors frais de livraison (le montant total comprend les frais). */
+    public function getMontantHorsFraisAttribute(): int
+    {
+        return max(0, (int) $this->montant_total - (int) $this->frais_livraison);
+    }
+
     /** Sépare « Livre A / Livre B » (retour à la ligne, /, ;, +, |) en liste de titres. */
     public static function decouperLivres(?string $texte): array
     {
@@ -73,7 +80,7 @@ class Commande extends Model
     }
 
     /** @return array<int, array{titre: string, quantite: int}> */
-    public static function topLivres(?CarbonInterface $depuis = null, int $limite = 5): array
+    public static function topLivres(?CarbonInterface $depuis = null, int $limite = 5, ?CarbonInterface $jusqua = null): array
     {
         $requete = static::query()
             ->where('statut', '!=', 'annulee')
@@ -81,6 +88,9 @@ class Commande extends Model
 
         if ($depuis) {
             $requete->where('date_commande', '>=', $depuis);
+        }
+        if ($jusqua) {
+            $requete->where('date_commande', '<', $jusqua);
         }
 
         $compte = [];

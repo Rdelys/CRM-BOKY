@@ -22,6 +22,8 @@
 
     $partClients = $stats['contacts'] > 0 ? round($stats['clients'] / $stats['contacts'] * 100, 1) : null;
 
+    $ar = fn ($n) => number_format((int) $n, 0, ',', ' ') . ' Ar';
+
     $trend = function (?float $v, string $suffix) {
         if ($v === null) {
             return '<span class="text-xs text-slate-400">Pas de comparaison</span>';
@@ -39,7 +41,8 @@
         'Indicateurs' => [
             'contacts_clients' => 'Contacts et clients',
             'kpi_contacts'     => 'Nouveaux contacts et emails',
-            'kpi_commandes'    => "Commandes et chiffre d'affaires",
+            'kpi_commandes'    => 'Commandes (mois, à livrer, livrées)',
+            'ca_frais'         => "Chiffre d'affaires et frais de livraison",
             'kpi_fidelite'     => 'Conversion et fidélité (indicateurs)',
         ],
         'Suivi' => [
@@ -51,7 +54,7 @@
             'origine'           => 'Origine des contacts',
             'messages'          => 'Messages envoyés',
             'statut_commandes'  => 'Statut des commandes',
-            'commandes'         => 'Commandes et CA',
+            'commandes'         => 'Commandes, CA et frais',
             'conversion'        => 'Taux de conversion',
             'conversion_source' => 'Conversion par source',
             'fidelite'          => 'Taux de fidélité',
@@ -62,7 +65,7 @@
             'top_livres'  => 'Livres les plus commandés',
         ],
         'Activité récente' => [
-            'derniers_contacts'  => 'Derniers contacts',
+            'derniers_contacts'   => 'Derniers contacts',
             'dernieres_campagnes' => 'Dernières campagnes',
             'dernieres_commandes' => 'Dernières commandes',
         ],
@@ -218,7 +221,7 @@
 </div>
 
 {{-- KPI commandes --}}
-<div data-section="kpi_commandes" class="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
+<div data-section="kpi_commandes" class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
     <div class="card p-5">
         <div class="flex items-center justify-between">
             <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Commandes ce mois</span>
@@ -228,17 +231,6 @@
         </div>
         <div class="mt-2 text-3xl font-bold text-slate-900">{{ number_format($stats['cmd_month'], 0, ',', ' ') }}</div>
         <div class="mt-3">{!! $trend($stats['cmd_month_trend'], 'vs mois dernier') !!}</div>
-    </div>
-
-    <div class="card p-5">
-        <div class="flex items-center justify-between">
-            <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Chiffre d'affaires ce mois</span>
-            <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
-                <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
-            </span>
-        </div>
-        <div class="mt-2 text-3xl font-bold text-slate-900">{{ number_format($stats['ca_month'], 0, ',', ' ') }} <span class="text-base font-semibold text-slate-400">Ar</span></div>
-        <div class="mt-3">{!! $trend($stats['ca_month_trend'], 'vs mois dernier') !!}</div>
     </div>
 
     <div class="card p-5">
@@ -264,6 +256,121 @@
         </div>
         <div class="mt-2 text-3xl font-bold text-slate-900">{{ number_format($stats['livrees_month'], 0, ',', ' ') }}</div>
         <div class="mt-3">{!! $trend($stats['livrees_month_trend'], 'vs mois dernier') !!}</div>
+    </div>
+</div>
+
+{{-- Chiffre d'affaires et frais de livraison --}}
+<div data-section="ca_frais" class="mb-6">
+    <div class="mb-3">
+        <h2 class="text-lg font-bold text-slate-900">Chiffre d'affaires et frais de livraison</h2>
+        <p class="text-xs text-slate-500">Commandes annulées exclues. Le chiffre d'affaires comprend les frais de livraison.</p>
+    </div>
+
+    <div class="mb-4 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {{-- CA du mois --}}
+        <div class="card p-5">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">CA ce mois</span>
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-emerald-50 text-emerald-600">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M14 7h7v7"/></svg>
+                </span>
+            </div>
+            <div class="mt-2 text-3xl font-bold text-slate-900">{{ number_format($stats['ca_month'], 0, ',', ' ') }} <span class="text-base font-semibold text-slate-400">Ar</span></div>
+            <div class="mt-1 text-xs text-slate-500">{{ $stats['ca_month_dates'] }}</div>
+            <div class="mt-3">{!! $trend($stats['ca_month_trend'], 'vs mois dernier') !!}</div>
+            <div class="mt-3 text-xs text-slate-500">
+                dont <strong class="text-slate-900">{{ $ar($stats['frais_month']) }}</strong> de livraison
+                · hors frais <strong class="text-slate-900">{{ $ar(max(0, $stats['ca_month'] - $stats['frais_month'])) }}</strong>
+            </div>
+        </div>
+
+        {{-- CA de l'année --}}
+        <div class="card p-5">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">CA de l'année {{ now()->year }}</span>
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                </span>
+            </div>
+            <div class="mt-2 text-3xl font-bold text-slate-900">{{ number_format($stats['ca_year'], 0, ',', ' ') }} <span class="text-base font-semibold text-slate-400">Ar</span></div>
+            <div class="mt-1 text-xs text-slate-500">{{ $stats['ca_year_dates'] }}</div>
+            <div class="mt-3">{!! $trend($stats['ca_year_trend'], 'vs année dernière') !!}</div>
+            <div class="mt-3 text-xs text-slate-500">
+                dont <strong class="text-slate-900">{{ $ar($stats['frais_year']) }}</strong> de livraison
+                · hors frais <strong class="text-slate-900">{{ $ar(max(0, $stats['ca_year'] - $stats['frais_year'])) }}</strong>
+            </div>
+        </div>
+
+        {{-- CA global --}}
+        <div class="card p-5">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">CA global depuis la création</span>
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-blue-50 text-blue-600">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                </span>
+            </div>
+            <div class="mt-2 text-3xl font-bold text-slate-900">{{ number_format($stats['ca_total'], 0, ',', ' ') }} <span class="text-base font-semibold text-slate-400">Ar</span></div>
+            <div class="mt-1 text-xs text-slate-500">
+                @if($stats['ca_total_since'])
+                    du {{ $stats['ca_total_since'] }} au {{ today()->format('d/m/Y') }}
+                @else
+                    Aucune commande
+                @endif
+            </div>
+            <div class="mt-3 text-xs text-slate-500">
+                dont <strong class="text-slate-900">{{ $ar($stats['frais_total']) }}</strong> de livraison
+                · hors frais <strong class="text-slate-900">{{ $ar(max(0, $stats['ca_total'] - $stats['frais_total'])) }}</strong>
+            </div>
+        </div>
+    </div>
+
+    <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
+        {{-- Frais du mois --}}
+        <div class="card p-5">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Frais de livraison ce mois</span>
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/></svg>
+                </span>
+            </div>
+            <div class="mt-2 text-3xl font-bold text-slate-900">{{ number_format($stats['frais_month'], 0, ',', ' ') }} <span class="text-base font-semibold text-slate-400">Ar</span></div>
+            <div class="mt-1 text-xs text-slate-500">{{ $stats['ca_month_dates'] }}</div>
+            <div class="mt-3">{!! $trend($stats['frais_month_trend'], 'vs mois dernier') !!}</div>
+        </div>
+
+        {{-- Frais de l'année --}}
+        <div class="card p-5">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Frais de livraison {{ now()->year }}</span>
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+                </span>
+            </div>
+            <div class="mt-2 text-3xl font-bold text-slate-900">{{ number_format($stats['frais_year'], 0, ',', ' ') }} <span class="text-base font-semibold text-slate-400">Ar</span></div>
+            <div class="mt-1 text-xs text-slate-500">{{ $stats['ca_year_dates'] }}</div>
+            <div class="mt-3">{!! $trend($stats['frais_year_trend'], 'vs année dernière') !!}</div>
+        </div>
+
+        {{-- Frais global --}}
+        <div class="card p-5">
+            <div class="flex items-center justify-between">
+                <span class="text-xs font-semibold uppercase tracking-wider text-slate-500">Frais de livraison depuis la création</span>
+                <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-amber-50 text-amber-600">
+                    <svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                </span>
+            </div>
+            <div class="mt-2 text-3xl font-bold text-slate-900">{{ number_format($stats['frais_total'], 0, ',', ' ') }} <span class="text-base font-semibold text-slate-400">Ar</span></div>
+            <div class="mt-1 text-xs text-slate-500">
+                @if($stats['ca_total_since'])
+                    du {{ $stats['ca_total_since'] }} au {{ today()->format('d/m/Y') }}
+                @else
+                    Aucune commande
+                @endif
+            </div>
+            <div class="mt-3 text-xs text-slate-500">
+                soit <strong class="text-slate-900">{{ $stats['ca_total'] > 0 ? number_format($stats['frais_total'] / $stats['ca_total'] * 100, 1, ',', ' ') . ' %' : '—' }}</strong> du CA
+            </div>
+        </div>
     </div>
 </div>
 
@@ -473,12 +580,14 @@
                 <p class="text-sm text-slate-500">
                     <span id="cmd-total" class="font-semibold text-slate-900">0</span> commandes ·
                     CA <span id="cmd-ca" class="font-semibold text-slate-900">0 Ar</span> ·
+                    livraison <span id="cmd-frais" class="font-semibold text-slate-900">0 Ar</span> ·
                     livrées <span id="cmd-taux" class="font-semibold text-slate-900">—</span>
                 </p>
             </div>
             <div class="seg" id="cmd-seg">
                 <button type="button" class="seg-btn" data-mode="commandes">Commandes</button>
                 <button type="button" class="seg-btn" data-mode="ca">Chiffre d'affaires</button>
+                <button type="button" class="seg-btn" data-mode="frais">Frais de livraison</button>
             </div>
         </div>
         <div class="relative mt-4 h-64">
@@ -624,7 +733,12 @@
                         <div class="truncate text-xs text-slate-500">{{ \Illuminate\Support\Str::limit(str_replace(["\r", "\n"], ' ', (string) $commande->livres), 90) }}</div>
                     </div>
                     <div class="flex items-center gap-3">
-                        <span class="text-sm font-semibold text-slate-700">{{ number_format($commande->montant_total, 0, ',', ' ') }} Ar</span>
+                        <span class="text-right text-sm font-semibold text-slate-700">
+                            {{ number_format($commande->montant_total, 0, ',', ' ') }} Ar
+                            @if($commande->frais_livraison > 0)
+                                <span class="block text-xs font-normal text-slate-400">dont {{ number_format($commande->frais_livraison, 0, ',', ' ') }} livraison</span>
+                            @endif
+                        </span>
                         @include('commandes._statut', ['statut' => $commande->statut])
                     </div>
                 </li>
@@ -987,7 +1101,7 @@
     function cmdOptions() {
         const o = barOptions();
         o.plugins.tooltip.callbacks.label = ctx =>
-            ctx.dataset.label + ' : ' + nf.format(ctx.parsed.y) + (state.cmdMode === 'ca' ? ' Ar' : '');
+            ctx.dataset.label + ' : ' + nf.format(ctx.parsed.y) + (state.cmdMode === 'commandes' ? '' : ' Ar');
         return o;
     }
 
@@ -1171,6 +1285,7 @@
         const totaux = STATUTS.map(s => sum(data.commandes[s.key] || []));
         const total = sum(totaux);
         const ca = sum(data.chiffre || []);
+        const frais = sum(data.frais || []);
         const annulees = sum(data.commandes.annulee || []);
         const livrees = sum(data.commandes.livree || []);
         const valides = total - annulees;
@@ -1183,6 +1298,8 @@
         cmdChart.data.labels = data.labels;
         if (state.cmdMode === 'ca') {
             cmdChart.data.datasets = [dataset("Chiffre d'affaires", data.chiffre || [], '#2563eb')];
+        } else if (state.cmdMode === 'frais') {
+            cmdChart.data.datasets = [dataset('Frais de livraison', data.frais || [], '#f59e0b')];
         } else {
             cmdChart.data.datasets = STATUTS.map(s => dataset(s.label, data.commandes[s.key] || [], s.color));
         }
@@ -1190,9 +1307,11 @@
 
         $('cmd-total').textContent = nf.format(total);
         $('cmd-ca').textContent = nf.format(ca) + ' Ar';
+        $('cmd-frais').textContent = nf.format(frais) + ' Ar';
         $('cmd-taux').textContent = valides > 0 ? Math.round(livrees / valides * 100) + ' %' : '—';
 
-        const vide = state.cmdMode === 'ca' ? ca === 0 : total === 0;
+        const vide = state.cmdMode === 'ca' ? ca === 0 : (state.cmdMode === 'frais' ? frais === 0 : total === 0);
+        $('cmd-empty').textContent = state.cmdMode === 'frais' ? 'Aucun frais de livraison sur cette période' : (state.cmdMode === 'ca' ? 'Aucun chiffre d\'affaires sur cette période' : 'Aucune commande sur cette période');
         $('cmd-empty').classList.toggle('hidden', !vide);
         $('cmd-empty').classList.toggle('flex', vide);
     }
@@ -1504,6 +1623,7 @@
 
     document.querySelectorAll('#cmd-seg [data-mode]').forEach(b => b.addEventListener('click', () => {
         state.cmdMode = b.dataset.mode;
+        cmdChart.options = cmdOptions();        // le suffixe « Ar » dépend du mode
         syncControls();
         if (data) renderCommandes();            // pas de requête : bascule instantanée
     }));

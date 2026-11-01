@@ -101,7 +101,12 @@
                             @endif
                         </td>
                         <td class="td whitespace-nowrap">{{ $commande->responsable ?: '—' }}</td>
-                        <td class="td whitespace-nowrap text-right font-semibold text-slate-900">{{ number_format($commande->montant_total, 0, ',', ' ') }} Ar</td>
+                        <td class="td whitespace-nowrap text-right">
+                            <div class="font-semibold text-slate-900">{{ number_format($commande->montant_total, 0, ',', ' ') }} Ar</div>
+                            @if($commande->frais_livraison > 0)
+                                <div class="text-xs text-slate-400">dont {{ number_format($commande->frais_livraison, 0, ',', ' ') }} Ar de livraison</div>
+                            @endif
+                        </td>
                         <td class="td">
                             <form method="POST" action="{{ route('commandes.statut', $commande) }}">
                                 @csrf

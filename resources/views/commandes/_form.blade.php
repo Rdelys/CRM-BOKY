@@ -111,10 +111,17 @@
             </div>
 
             <div>
-                <label class="label" for="montant_total">Montant total (Ar)</label>
+                <label class="label" for="montant_total">Montant total payé (Ar)</label>
                 <input type="number" id="montant_total" name="montant_total" value="{{ old('montant_total', $commande->montant_total) }}" min="0" step="100" class="input">
+                <p class="mt-1 text-xs text-slate-400">Frais de livraison compris.</p>
             </div>
             <div>
+                <label class="label" for="frais_livraison">Frais de livraison (Ar)</label>
+                <input type="number" id="frais_livraison" name="frais_livraison" value="{{ old('frais_livraison', $commande->frais_livraison ?? 0) }}" min="0" step="100" class="input" placeholder="0">
+                <p class="mt-1 text-xs text-slate-400">Montant hors frais : <strong id="montant-net" class="text-slate-600">—</strong></p>
+            </div>
+
+            <div class="sm:col-span-2">
                 <label class="label" for="mode_paiement">Paiement</label>
                 <input type="text" id="mode_paiement" name="mode_paiement" value="{{ old('mode_paiement', $commande->mode_paiement) }}" list="liste-paiements" class="input" maxlength="60" placeholder="En espèce">
                 <datalist id="liste-paiements">
@@ -165,6 +172,7 @@
 (function () {
     const URL_RECHERCHE = @json(route('commandes.contacts.recherche'));
     const $ = id => document.getElementById(id);
+    const nf = new Intl.NumberFormat('fr-FR');
     let minuteur = null;
 
     function modeCourant() {
@@ -181,10 +189,19 @@
 
     document.querySelectorAll('input[name="mode_contact"]').forEach(r => r.addEventListener('change', majMode));
 
+    // Montant hors frais de livraison
+    function majNet() {
+        const total = parseFloat($('montant_total').value) || 0;
+        const frais = parseFloat($('frais_livraison').value) || 0;
+        $('montant-net').textContent = nf.format(Math.max(0, total - frais)) + ' Ar';
+    }
+    $('montant_total').addEventListener('input', majNet);
+    $('frais_livraison').addEventListener('input', majNet);
+
     function choisir(c) {
         $('contact_id').value = c.id;
         $('sel-nom').textContent = c.name;
-        $('contact_telephone').value = c.phone || '';   // ← ajout
+        $('contact_telephone').value = c.phone || '';
         $('sel-info').textContent = [c.phone, c.email, c.status].filter(Boolean).join(' · ');
         $('contact-selected').classList.remove('hidden');
         $('contact-selected').classList.add('flex');
@@ -248,7 +265,7 @@
 
     $('contact-change').addEventListener('click', () => {
         $('contact_id').value = '';
-        $('contact_telephone').value = '';              // ← ajout
+        $('contact_telephone').value = '';
         $('contact-selected').classList.add('hidden');
         $('contact-selected').classList.remove('flex');
         $('contact-picker').classList.remove('hidden');
@@ -263,6 +280,7 @@
     });
 
     majMode();
+    majNet();
 })();
 </script>
 @endpush

@@ -35,6 +35,8 @@ class DashboardController extends Controller
         $yesterdayStart = today()->subDay();
         $monthStart     = now()->startOfMonth();
         $prevMonthStart = now()->startOfMonth()->subMonth();
+        $yearStart      = now()->startOfYear();
+        $prevYearStart  = now()->startOfYear()->subYear();
 
         $newToday     = $this->acquired($todayStart, $todayStart->copy()->addDay());
         $newYesterday = $this->acquired($yesterdayStart, $todayStart);
@@ -45,13 +47,27 @@ class DashboardController extends Controller
         $mailsPrev  = $this->sent('email', $prevMonthStart, $monthStart);
 
         $monthEnd = $monthStart->copy()->addMonth();
+        $yearEnd  = $yearStart->copy()->addYear();
 
         $cmdMonth = $this->commandes($monthStart, $monthEnd);
         $cmdPrev  = $this->commandes($prevMonthStart, $monthStart);
-        $caMonth  = $this->chiffre($monthStart, $monthEnd);
-        $caPrev   = $this->chiffre($prevMonthStart, $monthStart);
         $livMonth = $this->commandes($monthStart, $monthEnd, 'livree');
         $livPrev  = $this->commandes($prevMonthStart, $monthStart, 'livree');
+
+        // Chiffre d'affaires (montant total, frais de livraison compris) et frais de livraison
+        $caMonth   = $this->chiffre($monthStart, $monthEnd);
+        $caPrev    = $this->chiffre($prevMonthStart, $monthStart);
+        $caYear    = $this->chiffre($yearStart, $yearEnd);
+        $caPrevYear = $this->chiffre($prevYearStart, $yearStart);
+        $caTotal   = $this->chiffre();
+
+        $fraisMonth    = $this->frais($monthStart, $monthEnd);
+        $fraisPrev     = $this->frais($prevMonthStart, $monthStart);
+        $fraisYear     = $this->frais($yearStart, $yearEnd);
+        $fraisPrevYear = $this->frais($prevYearStart, $yearStart);
+        $fraisTotal    = $this->frais();
+
+        $premiereCommande = Commande::where('statut', '!=', 'annulee')->min('date_commande');
 
         // Conversion globale et fidélité (3 mois)
         $contactsTotal = Contact::count();
@@ -86,14 +102,28 @@ class DashboardController extends Controller
 
             'cmd_month'           => $cmdMonth,
             'cmd_month_trend'     => $this->trend($cmdMonth, $cmdPrev),
-            'ca_month'            => $caMonth,
-            'ca_month_trend'      => $this->trend($caMonth, $caPrev),
             'livrees_month'       => $livMonth,
             'livrees_month_trend' => $this->trend($livMonth, $livPrev),
             'a_livrer'            => Commande::whereIn('statut', Commande::STATUTS_A_LIVRER)->count(),
             'a_livrer_today'      => Commande::whereIn('statut', Commande::STATUTS_A_LIVRER)
                 ->whereDate('date_livraison', today())
                 ->count(),
+
+            // CA et frais de livraison
+            'ca_month'         => $caMonth,
+            'ca_month_trend'   => $this->trend($caMonth, $caPrev),
+            'ca_month_dates'   => 'du ' . $monthStart->format('d/m/Y') . ' au ' . today()->format('d/m/Y'),
+            'ca_year'          => $caYear,
+            'ca_year_trend'    => $this->trend($caYear, $caPrevYear),
+            'ca_year_dates'    => 'du ' . $yearStart->format('d/m/Y') . ' au ' . today()->format('d/m/Y'),
+            'ca_total'         => $caTotal,
+            'ca_total_since'   => $premiereCommande ? Carbon::parse($premiereCommande)->format('d/m/Y') : null,
+
+            'frais_month'       => $fraisMonth,
+            'frais_month_trend' => $this->trend($fraisMonth, $fraisPrev),
+            'frais_year'        => $fraisYear,
+            'frais_year_trend'  => $this->trend($fraisYear, $fraisPrevYear),
+            'frais_total'       => $fraisTotal,
         ];
 
         $latestContacts  = Contact::latest()->limit(6)->get();
@@ -164,12 +194,17 @@ class DashboardController extends Controller
             }
         }
 
-        // Commandes par statut + chiffre d'affaires (hors annulées)
+        // Commandes par statut + chiffre d'affaires et frais de livraison (hors annulées)
         $commandes = array_fill_keys(array_keys(Commande::STATUTS), $zeros);
         $chiffre = $zeros;
+        $frais = $zeros;
 
         $rows = Commande::query()
-            ->selectRaw($this->bucketExpr('date_commande', $period) . ' as bucket_key, statut, COUNT(*) as total, COALESCE(SUM(montant_total), 0) as ca')
+            ->selectRaw(
+                $this->bucketExpr('date_commande', $period)
+                . ' as bucket_key, statut, COUNT(*) as total,'
+                . ' COALESCE(SUM(montant_total), 0) as ca, COALESCE(SUM(frais_livraison), 0) as frais'
+            )
             ->where('date_commande', '>=', $start)
             ->where('date_commande', '<', $end)
             ->groupBy('bucket_key', 'statut')
@@ -182,6 +217,7 @@ class DashboardController extends Controller
             $commandes[$row->statut][$index[$row->bucket_key]] = (int) $row->total;
             if ($row->statut !== 'annulee') {
                 $chiffre[$index[$row->bucket_key]] += (int) $row->ca;
+                $frais[$index[$row->bucket_key]] += (int) $row->frais;
             }
         }
 
@@ -243,6 +279,7 @@ class DashboardController extends Controller
             'messages'    => $messages,
             'commandes'   => $commandes,
             'chiffre'     => $chiffre,
+            'frais'       => $frais,
             'conversion'  => $conv,
             'top_clients' => $this->topClients($start, $end),
             'top_livres'  => Commande::topLivres($start, 5, $end),
@@ -562,13 +599,24 @@ class DashboardController extends Controller
             ->count();
     }
 
-    /** Chiffre d'affaires (commandes non annulées). */
-    private function chiffre(CarbonInterface $from, CarbonInterface $to): int
+    /** Chiffre d'affaires (commandes non annulées, frais de livraison compris). Sans dates : depuis la création. */
+    private function chiffre(?CarbonInterface $from = null, ?CarbonInterface $to = null): int
     {
-        return (int) Commande::where('date_commande', '>=', $from)
-            ->where('date_commande', '<', $to)
+        return (int) Commande::query()
             ->where('statut', '!=', 'annulee')
+            ->when($from, fn ($q) => $q->where('date_commande', '>=', $from))
+            ->when($to, fn ($q) => $q->where('date_commande', '<', $to))
             ->sum('montant_total');
+    }
+
+    /** Frais de livraison facturés (commandes non annulées). Sans dates : depuis la création. */
+    private function frais(?CarbonInterface $from = null, ?CarbonInterface $to = null): int
+    {
+        return (int) Commande::query()
+            ->where('statut', '!=', 'annulee')
+            ->when($from, fn ($q) => $q->where('date_commande', '>=', $from))
+            ->when($to, fn ($q) => $q->where('date_commande', '<', $to))
+            ->sum('frais_livraison');
     }
 
     /** Variation en % (null s'il n'y a rien à comparer). */

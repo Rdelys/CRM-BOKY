@@ -25,6 +25,7 @@
             <li>Chaque client importé avec une commande non annulée passe en statut « Client ».</li>
             <li>Vous pouvez réimporter le même fichier : une commande déjà importée (même client et même horodateur) est mise à jour, pas dupliquée.</li>
             <li>Une cellule vide n'écrase jamais une donnée existante.</li>
+            <li>Le « Montant total » comprend les frais de livraison ; la colonne « Frais de livraison » (facultative) indique la part de livraison.</li>
         </ul>
     </div>
 
@@ -51,6 +52,7 @@
                         ['RESPONSABLE', 'Responsable'],
                         ['Farito ny ora…', 'Précision de l\'heure'],
                         ['Montant total', 'Montant total'],
+                        ['Frais de livraison', 'Frais de livraison'],
                         ['Statut de la commande', 'Statut'],
                     ] as [$source, $cible])
                         <tr>
@@ -64,7 +66,7 @@
 
         <p class="mt-4 text-xs text-slate-500">
             Les colonnes en français (Nom, Téléphone, Email, Ville, Adresse de livraison, Livres, Paiement, Date de livraison,
-            Heure de livraison, Responsable, Montant total, Statut) sont aussi reconnues.
+            Heure de livraison, Responsable, Montant total, Frais de livraison, Statut) sont aussi reconnues.
         </p>
 
         <div class="mt-4 flex flex-wrap gap-2">
