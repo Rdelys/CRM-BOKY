@@ -93,7 +93,10 @@
                                     <div class="text-xs text-slate-500">{{ $contact->city }}</div>
                                 @endif
                                 @if($contact->facebook_psid)
-                                    @php($fbActive = $contact->last_fb_interaction_at && $contact->last_fb_interaction_at->gt(now()->subHours(24)))
+                                    @php
+                                        $fbActive = $contact->last_fb_interaction_at
+                                            && $contact->last_fb_interaction_at->gt(now()->subHours(24));
+                                    @endphp
                                     <div class="mt-1 flex items-center gap-1.5 text-xs">
                                         <span class="rounded bg-blue-100 px-1.5 py-0.5 font-semibold text-blue-700">Messenger</span>
                                         @if($fbActive)
@@ -106,7 +109,27 @@
                             </div>
                         </div>
                     </td>
-                    <td class="td whitespace-nowrap">{{ $contact->phone ?: '—' }}</td>
+                    @php
+                        $smsPhone = ! $contact->unsubscribed ? \App\Services\MapiService::normalize($contact->phone) : null;
+                        $texteSms = 'Bonjour ' . $contact->name . ', nous avons de nouveaux livres qui pourraient vous plaire. Souhaitez-vous que nous vous conseillions ?';
+                    @endphp
+                    <td class="td whitespace-nowrap">
+                        <div class="flex items-center gap-2">
+                            <span>{{ $contact->phone ?: '—' }}</span>
+                            @if($smsPhone)
+                                <button type="button" data-sms-open
+                                        data-contact-id="{{ $contact->id }}"
+                                        data-name="{{ $contact->name }}"
+                                        data-phone="{{ \App\Services\MapiService::format($smsPhone) }}"
+                                        data-origine="contacts"
+                                        data-message="{{ $texteSms }}"
+                                        title="Envoyer un SMS" aria-label="Envoyer un SMS à {{ $contact->name }}"
+                                        class="inline-flex h-7 w-7 items-center justify-center rounded-full bg-blue-50 text-blue-600 transition hover:bg-blue-600 hover:text-white">
+                                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+                                </button>
+                            @endif
+                        </div>
+                    </td>
                     <td class="td">{{ $contact->email ?: '—' }}</td>
                     <td class="td">{{ \App\Models\Contact::SOURCES[$contact->source] ?? $contact->source }}</td>
                     <td class="td">@include('contacts._status', ['status' => $contact->status])</td>
@@ -161,4 +184,5 @@
     refresh();
 })();
 </script>
+@include('messages._modal')
 @endsection

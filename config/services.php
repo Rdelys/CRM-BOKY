@@ -35,4 +35,9 @@ return [
         ],
     ],
 
+    'mapi' => [
+        'key' => env('MAPI_API_KEY'),
+        'url' => env('MAPI_API_URL', 'https://messaging.mapi.mg/api'),
+    ],
+
 ];

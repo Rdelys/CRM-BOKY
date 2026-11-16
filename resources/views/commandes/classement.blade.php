@@ -1,4 +1,5 @@
 @extends('layouts.crm')
+@use('App\Services\MapiService')
 @section('title', 'Meilleurs clients')
 
 @section('content')
@@ -79,6 +80,14 @@
                             $niveau = $ligne->nb_commandes >= 5 ? ['VIP', 'bg-violet-50 text-violet-700 ring-violet-600/20']
                                 : ($ligne->nb_commandes >= 2 ? ['Fidèle', 'bg-emerald-50 text-emerald-700 ring-emerald-600/20']
                                 : ['Nouveau', 'bg-slate-100 text-slate-600 ring-slate-500/20']);
+                            $smsPhone = $contact && ! $contact->unsubscribed ? MapiService::normalize($contact->phone) : null;
+$nb = (int) $ligne->nb_commandes;
+$surPeriode = $periode === 'tout' ? '' : ' sur ' . $periodes[$periode];
+$texteSms = 'Bonjour ' . ($contact->name ?? '') . ', '
+    . ($nb >= 5 ? 'vous faites partie de nos meilleurs clients, merci ! ' : 'merci pour votre confiance ! ')
+    . 'Vous avez passé ' . $nb . ' commande' . ($nb > 1 ? 's' : '') . $surPeriode
+    . ' chez nous, pour un total de ' . number_format($ligne->total, 0, ',', ' ') . ' Ar. '
+    . 'Quel livre aimeriez-vous découvrir ensuite ?';
                         @endphp
                         <tr class="hover:bg-slate-50/60">
                             <td class="td">
@@ -96,6 +105,18 @@
                             <td class="td whitespace-nowrap text-right">{{ number_format($ligne->nb_commandes > 0 ? round($ligne->total / $ligne->nb_commandes) : 0, 0, ',', ' ') }} Ar</td>
                             <td class="td whitespace-nowrap">{{ \Illuminate\Support\Carbon::parse($ligne->derniere)->format('d/m/Y') }}</td>
                             <td class="td whitespace-nowrap text-right">
+                                @if($smsPhone)
+    <button type="button" data-sms-open
+            data-contact-id="{{ $contact->id }}"
+            data-name="{{ $contact->name }}"
+            data-phone="{{ MapiService::format($smsPhone) }}"
+            data-origine="classement"
+            data-message="{{ $texteSms }}"
+            class="mr-3 inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800">
+        <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        SMS
+    </button>
+@endif
                                 @if($contact)
                                     <a href="{{ route('commandes.create', ['contact_id' => $contact->id]) }}" class="text-sm font-medium text-emerald-600 hover:text-emerald-800">Nouvelle commande</a>
                                 @endif
@@ -138,4 +159,5 @@
 <div class="mt-5">
     {{ $clients->links() }}
 </div>
+@include('messages._modal')
 @endsection

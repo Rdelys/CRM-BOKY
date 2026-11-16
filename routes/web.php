@@ -15,6 +15,7 @@ use App\Http\Controllers\MarketingController;
 use App\Http\Controllers\ObjectifController;
 use App\Http\Controllers\DeliveryFeeController;
 use App\Http\Controllers\SatisfactionController;
+use App\Http\Controllers\MessageController;
 
 // Réception des prospects depuis le siteweb (protégé par jeton, sans CSRF)
 Route::post('/leads', [LeadController::class, 'store'])
@@ -80,6 +81,11 @@ Route::get('/objectifs/resume', [ObjectifController::class, 'summary'])->name('o
  // Satisfaction clients
     Route::get('/satisfactions', [SatisfactionController::class, 'index'])->name('satisfactions.index');
     Route::delete('/satisfactions/{satisfaction}', [SatisfactionController::class, 'destroy'])->name('satisfactions.destroy');
+    
+        // Messages SMS (Mapi)
+    Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
+    Route::post('/messages/envoyer', [MessageController::class, 'send'])->middleware('throttle:30,1')->name('messages.send');
+    Route::post('/messages/{message}/renvoyer', [MessageController::class, 'resend'])->middleware('throttle:30,1')->name('messages.resend');
     
 
     // Frais de livraison

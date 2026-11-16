@@ -21,7 +21,9 @@
         ['route' => 'password.edit',      'match' => 'password.*',  'label' => 'Mot de passe',    'icon' => '<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>'],
         ['route' => 'livraisons.index', 'match' => 'livraisons.*', 'label' => 'Frais de livraison', 'icon' => '<rect x="1" y="3" width="15" height="13"/><path d="M16 8h4l3 3v5h-7V8z"/><circle cx="5.5" cy="18.5" r="2.5"/><circle cx="18.5" cy="18.5" r="2.5"/>'],
         ['route' => 'satisfactions.index', 'match' => 'satisfactions.*', 'label' => 'Satisfaction', 'icon' => '<circle cx="12" cy="12" r="10"/><path d="M8 14s1.5 2 4 2 4-2 4-2"/><path d="M9 9h.01M15 9h.01"/>'],
-    ];
+        ['route' => 'messages.index', 'match' => 'messages.*', 'label' => 'Messages', 'icon' => '<path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/>'],
+            
+        ];
     $user = auth()->user();
 @endphp
 
