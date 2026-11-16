@@ -13,7 +13,7 @@
         <div class="mb-6 text-center">
             <div class="text-5xl">📚</div>
             <h1 class="mt-3 text-xl font-bold text-slate-900 sm:text-2xl">Votre avis nous intéresse</h1>
-            <p class="mt-1 text-sm text-slate-500">Dites-nous ce que vous avez pensé de votre livre. Cela prend 30 secondes.</p>
+            <p class="mt-1 text-sm text-slate-500">Dites-nous ce que vous avez pensé de votre livre et du service de Ny Herin'ny Boky. Cela prend 30 secondes.</p>
         </div>
 
         @if($errors->any())

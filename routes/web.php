@@ -86,7 +86,7 @@ Route::get('/objectifs/resume', [ObjectifController::class, 'summary'])->name('o
     Route::get('/messages', [MessageController::class, 'index'])->name('messages.index');
     Route::post('/messages/envoyer', [MessageController::class, 'send'])->middleware('throttle:30,1')->name('messages.send');
     Route::post('/messages/{message}/renvoyer', [MessageController::class, 'resend'])->middleware('throttle:30,1')->name('messages.resend');
-    
+
 
     // Frais de livraison
     Route::post('/livraisons/lien/activer', [DeliveryFeeController::class, 'toggleShare'])->name('livraisons.share.toggle');
@@ -112,8 +112,13 @@ Route::get('/webhooks/facebook', [FacebookWebhookController::class, 'verify']);
 Route::post('/webhooks/facebook', [FacebookWebhookController::class, 'receive'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class]);
 
-   // Page publique de satisfaction (lien envoyé aux clients, ?src=whatsapp|sms|... pour suivre la source)
+// Page publique de satisfaction (lien envoyé aux clients, ?src=whatsapp|sms|... pour suivre la source)
 Route::get('/avis', [SatisfactionController::class, 'form'])->name('satisfactions.public');
 Route::post('/avis', [SatisfactionController::class, 'store'])
     ->middleware('throttle:10,1')->name('satisfactions.store');
 Route::get('/avis/merci', [SatisfactionController::class, 'thanks'])->name('satisfactions.thanks');
+
+// Mur des avis (page publique qui affiche les avis clients)
+Route::get('/avis-clients', [SatisfactionController::class, 'wall'])
+    ->middleware('throttle:60,1')
+    ->name('satisfactions.wall');

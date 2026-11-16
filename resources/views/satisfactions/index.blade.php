@@ -12,7 +12,11 @@
         <h1 class="text-2xl font-bold text-slate-900">Satisfaction clients</h1>
         <p class="text-sm text-slate-500">Avis reçus via le lien de satisfaction.</p>
     </div>
-    <a href="{{ route('satisfactions.public') }}" target="_blank" class="btn-outline">Voir le formulaire</a>
+    <div class="flex flex-wrap gap-2">
+        <a href="{{ route('satisfactions.wall') }}" target="_blank" class="btn-outline">Voir la page publique</a>
+        <button type="button" class="btn-dark" data-copy="{{ route('satisfactions.wall') }}">Copier le lien des avis</button>
+        <a href="{{ route('satisfactions.public') }}" target="_blank" class="btn-outline">Voir le formulaire</a>
+    </div>
 </div>
 
 {{-- Liens à envoyer --}}

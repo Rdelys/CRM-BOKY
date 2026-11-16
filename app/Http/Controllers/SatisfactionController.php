@@ -3,12 +3,19 @@
 namespace App\Http\Controllers;
 
 use App\Models\Satisfaction;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 
 class SatisfactionController extends Controller
 {
+    /**
+     * Note minimale pour qu'un avis (avec commentaire) apparaisse sur la page publique.
+     * Mettre 1 pour tout afficher.
+     */
+    private const NOTE_MIN_PUBLIC = 4;
+
     private function cleanSource(?string $value): string
     {
         $v = Str::of((string) $value)->lower()
@@ -61,6 +68,49 @@ class SatisfactionController extends Controller
     public function thanks()
     {
         return view('satisfactions.thanks');
+    }
+
+    /** Page publique : le mur des avis clients */
+    public function wall(Request $request)
+    {
+        Carbon::setLocale('fr');
+
+        $total      = Satisfaction::count();
+        $moyenne    = $total ? round((float) Satisfaction::avg('note'), 1) : 0;
+        $satisfaits = Satisfaction::where('note', '>=', 4)->count();
+        $taux       = $total ? round($satisfaits / $total * 100) : 0;
+
+        $distribution = Satisfaction::select('note', DB::raw('COUNT(*) as total'))
+            ->groupBy('note')->pluck('total', 'note');
+
+        // Filtres proposés : uniquement les notes affichables publiquement
+        $notesPubliques = collect(Satisfaction::NOTES)
+            ->filter(fn ($n, $v) => $v >= self::NOTE_MIN_PUBLIC);
+
+        $filtre = (int) $request->query('note');
+        if (! $notesPubliques->has($filtre)) {
+            $filtre = 0;
+        }
+
+        $avis = Satisfaction::query()
+            ->whereNotNull('commentaire')
+            ->where('commentaire', '!=', '')
+            ->where('note', '>=', self::NOTE_MIN_PUBLIC)
+            ->when($filtre, fn ($q) => $q->where('note', $filtre))
+            ->latest()
+            ->paginate(12)
+            ->withQueryString();
+
+        return view('satisfactions.wall', [
+            'total'          => $total,
+            'moyenne'        => $moyenne,
+            'taux'           => $taux,
+            'distribution'   => $distribution,
+            'avis'           => $avis,
+            'notes'          => Satisfaction::NOTES,
+            'notesPubliques' => $notesPubliques,
+            'filtre'         => $filtre,
+        ]);
     }
 
     /* ---------- Admin (CRM) ---------- */

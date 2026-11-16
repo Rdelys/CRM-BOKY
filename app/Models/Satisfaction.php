@@ -25,4 +25,38 @@ class Satisfaction extends Model
         'email'     => 'Email',
         'direct'    => 'Direct / autre',
     ];
+
+    /** "Rakoto Jean" => "Rakoto J." (affichage public) */
+    public function getNomPublicAttribute(): string
+    {
+        $parts = preg_split('/\s+/u', trim((string) $this->nom), -1, PREG_SPLIT_NO_EMPTY);
+
+        if (! $parts) {
+            return 'Client';
+        }
+        if (count($parts) === 1) {
+            return $parts[0];
+        }
+
+        $last = end($parts);
+
+        return $parts[0] . ' ' . mb_strtoupper(mb_substr($last, 0, 1)) . '.';
+    }
+
+    /** "Rakoto Jean" => "RJ" */
+    public function getInitialesAttribute(): string
+    {
+        $parts = preg_split('/\s+/u', trim((string) $this->nom), -1, PREG_SPLIT_NO_EMPTY);
+
+        if (! $parts) {
+            return '?';
+        }
+
+        $i = mb_substr($parts[0], 0, 1);
+        if (count($parts) > 1) {
+            $i .= mb_substr(end($parts), 0, 1);
+        }
+
+        return mb_strtoupper($i);
+    }
 }
