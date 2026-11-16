@@ -14,6 +14,7 @@ use App\Http\Controllers\FacebookWebhookController;
 use App\Http\Controllers\MarketingController;
 use App\Http\Controllers\ObjectifController;
 use App\Http\Controllers\DeliveryFeeController;
+use App\Http\Controllers\SatisfactionController;
 
 // Réception des prospects depuis le siteweb (protégé par jeton, sans CSRF)
 Route::post('/leads', [LeadController::class, 'store'])
@@ -76,7 +77,10 @@ Route::middleware('auth')->group(function () {
     Route::post('/objectifs', [ObjectifController::class, 'save'])->name('objectifs.save');
     Route::post('/objectifs/reprendre', [ObjectifController::class, 'copy'])->name('objectifs.copy');
 Route::get('/objectifs/resume', [ObjectifController::class, 'summary'])->name('objectifs.summary');
-
+ // Satisfaction clients
+    Route::get('/satisfactions', [SatisfactionController::class, 'index'])->name('satisfactions.index');
+    Route::delete('/satisfactions/{satisfaction}', [SatisfactionController::class, 'destroy'])->name('satisfactions.destroy');
+    
 
     // Frais de livraison
     Route::post('/livraisons/lien/activer', [DeliveryFeeController::class, 'toggleShare'])->name('livraisons.share.toggle');
@@ -101,3 +105,9 @@ Route::get('/frais-livraison/{token}', [DeliveryFeeController::class, 'publicPag
 Route::get('/webhooks/facebook', [FacebookWebhookController::class, 'verify']);
 Route::post('/webhooks/facebook', [FacebookWebhookController::class, 'receive'])
     ->withoutMiddleware([\Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class]);
+
+   // Page publique de satisfaction (lien envoyé aux clients, ?src=whatsapp|sms|... pour suivre la source)
+Route::get('/avis', [SatisfactionController::class, 'form'])->name('satisfactions.public');
+Route::post('/avis', [SatisfactionController::class, 'store'])
+    ->middleware('throttle:10,1')->name('satisfactions.store');
+Route::get('/avis/merci', [SatisfactionController::class, 'thanks'])->name('satisfactions.thanks');
